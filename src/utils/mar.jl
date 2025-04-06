@@ -3,7 +3,6 @@
 # 2. is it better to divide or do power? ones(rank_X,1)./dx(1:rank_X)
 # 3. Why do we also include the dimensionality here? has something to do with svd?
 
-
 """
 Bayesian Multivariate Autoregressive Model estimation
 mar = estimate_mar(X, p, prior)
@@ -242,23 +241,7 @@ end
 
 function mar2csd(mar, freqs)
     sf = 2*freqs[end]   # freqs[end] is not the sampling frequency of the signal... not sure about this step.
-    Σ = mar["Σ"]
-    p = mar["p"]
-    A = mar["A"]
-    nd = size(Σ, 1)
-    w  = 2pi*freqs/sf
-    nf = length(w)
-	csd = zeros(eltype(Σ), nf, nd, nd)
-	for i = 1:nf
-		af_tmp = I
-		for k = 1:p
-			af_tmp = af_tmp + A[k] * exp(-im * k * w[i])
-		end
-		iaf_tmp = inv(af_tmp)
-		csd[i,:,:] = iaf_tmp * Σ * iaf_tmp'
-	end
-    csd = 2*csd/sf
-    return csd
+    return mar2csd(mar, freqs, sf)
 end
 
 
