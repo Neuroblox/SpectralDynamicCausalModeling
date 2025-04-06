@@ -1,35 +1,9 @@
 using ModelingToolkit
 using OrderedCollections
 
-"""
-#= Define notational equivalences between SPM12 and this code:
-
-# the following two precision matrices will not be updated by the code,
-# they belong to the assumed prior distribution p (fixed, but what if it isn't
-# the ground truth?)
-ipC = Πθ_pr   # precision matrix of prior of parameters p(θ)
-ihC = Πλ_pr   # precision matrix of prior of hyperparameters p(λ)
-
-Variational distribution parameters:
-pE, Ep = μθ_pr, μθ_po   # prior and posterior expectation of parameters (q(θ))
-pC, Cp = θΣ, Σθ   # prior and posterior covariance of parameters (q(θ))
-hE, Eh = μλ_pr, μλ   # prior and posterior expectation of hyperparameters (q(λ))
-hC, Ch = λΣ, Σλ   # prior and posterior covariance of hyperparameters (q(λ))
-
-Σ, iΣ  # data covariance matrix (likelihood), and its inverse (precision of likelihood - use Π only for those precisions that don't change)
-Q      # components of iΣ; definition: iΣ = sum(exp(λ)*Q)
-=#
-"""
-
 # compute Jacobian of rhs w.r.t. variable -> matrix exponential solution (use ExponentialUtilities.jl)
 # -> use this numerical integration as solution to the diffeq to then differentiate solution w.r.t. parameters (like sensitivity analysis in Ma et al. 2021)
 # -> that Jacobian is used in all the computations of the variational Bayes
-
-
-# Define priors etc.
-# Q, μθ_pr, θΣ, μλ_pr, λΣ
-
-# pE.A = A/128; μθ_pr
 
 """
     This is K(ω) in the spectral DCM paper.
@@ -85,171 +59,6 @@ function transferfunction_fmri(x, w, μθ_pr, C, lnϵ, lndecay, lntransit)   # r
     return S
 end
 
-function transferfunction_fmri(w, sts, derivatives, params)   # relates to: spm_dcm_mtf.m
-
-    C = params[:C]
-    C /= 16.0   # TODO: unclear why C is devided by 16 but see spm_fx_fmri.m:49
-
-    # 2. get jacobian of hemodynamics
-    ∂f = substitute(derivatives[:∂f], params)
-    ∂f = convert(Array{Real}, substitute(∂f, sts))
-    idx_A = findall(occursin.("A[", string.(derivatives[:∂f])))
-    A = ∂f[idx_A]
-    nd = Int(sqrt(length(A)))
-    A_tmp = A[[(i-1)*nd+i for i=1:nd]]
-    A[[(i-1)*nd+i for i=1:nd]] -= exp.(A_tmp)/2 + A_tmp
-    ∂f[idx_A] = A
-    # if I eventually need also the change of variables rather than just the derivative then here is where to fix it! 
-    dfdu = [diagm(C);
-            zeros(size(∂f, 1)-nd, length(C))]
-
-    F = eigen(Symbolics.value.(∂f), sortby=nothing, permute=true)
-    Λ = F.values
-    V = F.vectors
-
-    ∂g = substitute(derivatives[:∂g], params)
-    ∂g = Symbolics.value.(substitute(∂g, sts))
-    dgdv = ∂g*V
-    dvdu = pinv(V)*dfdu
-
-    nw = size(w,1)            # number of frequencies
-    ng = size(∂g,1)           # number of outputs
-    nu = size(dfdu,2)         # number of inputs
-    nk = size(V,2)            # number of modes
-    S = zeros(Complex, nw, ng, nu)
-
-    for j = 1:nu
-        for i = 1:ng
-            for k = 1:nk
-                # transfer functions (FFT of kernel)
-                Sk = (1im*2*pi*w .- Λ[k]).^-1    # TODO: clean up 1im*2*pi*freq instead of omega to be consistent with the usual nomenclature
-                S[:,i,j] .+= dgdv[i,k]*dvdu[k,j]*Sk
-            end
-        end
-    end
-    return S
-end
-
-function transferfunction(f, g, x, w, C, μθ_pr, lnϵ, lndecay, lntransit)   # relates to: spm_dcm_mtf.m
-
-    dfdu = [C; 
-            zeros(size(J,1), size(C, 2))]
-
-    F = eigen(J_tot, sortby=nothing, permute=true)
-    Λ = F.values
-    V = F.vectors
-
-    dgdx = boldsignal(x, lnϵ)[2]
-    dgdv = dgdx*V[end-size(dgdx,2)+1:end, :]     # TODO: not a clean solution, also not in the original code since it seems that the code really depends on the ordering of eigenvalues and respectively eigenvectors!
-    dvdu = pinv(V)*dfdu
-
-    nw = size(w,1)            # number of frequencies
-    ng = size(dgdx,1)         # number of outputs
-    nu = size(dfdu,2)         # number of inputs
-    nk = size(V,2)            # number of modes
-    S = zeros(Complex, nw, ng, nu)
-
-    for j = 1:nu
-        for i = 1:ng
-            for k = 1:nk
-                # transfer functions (FFT of kernel)
-                Sk = (1im*2*pi*w .- Λ[k]).^-1
-                S[:,i,j] .+= dgdv[i,k]*dvdu[k,j]*Sk
-            end
-        end
-    end
-    return S
-end
-
-
-function csd2mar(csd, w, dt, p)
-    # TODO: investiagate why SymmetricToeplitz(ccf[1:p, i, j]) is not good to be used but instead need to use Toeplitz(ccf[1:p, i, j], ccf[1:p, j, i])
-    # as is done in the original MATLAB code (confront comment there). ccf should be a symmetric matrix so there should be no difference between the
-    # Toeplitz matrices but for the second jacobian (J[2], see for loop for i = 1:nJ in function diff) the computation produces subtle differences between
-    # the two versions.
-
-    dw = w[2] - w[1]
-    w = w/dw
-    ns = dt^-1
-    N = ceil(Int64, ns/2/dw)
-    gj = findall(x -> x > 0 && x < (N + 1), w)
-    gi = gj .+ (ceil(Int64, w[1]) - 1)    # TODO: figure out what's the purpose of this!
-    g = zeros(ComplexF64, N)
-
-    # transform to cross-correlation function
-    ccf = zeros(ComplexF64, N*2+1, size(csd,2), size(csd,3))
-    for i = 1:size(csd, 2)
-        for j = 1:size(csd, 3)
-            g[gi] = csd[gj,i,j]
-            f = ifft(g)
-            f = ifft(vcat([0.0im; g; conj(g[end:-1:1])]))
-            ccf[:,i,j] = real.(fftshift(f))*N*dw
-        end
-    end
-
-    # MAR coefficients
-    N = size(ccf,1)
-    m = size(ccf,2)
-    n = (N - 1) ÷ 2
-    p = min(p, n - 1)
-    ccf = ccf[(1:n) .+ n,:,:]
-    A = zeros(m*p, m)
-    B = zeros(m*p, m*p)
-    for i = 1:m
-        for j = 1:m
-            A[((i-1)*p+1):i*p, j] = ccf[(1:p) .+ 1, i, j]
-            B[((i-1)*p+1):i*p, ((j-1)*p+1):j*p] = Toeplitz(ccf[1:p, i, j], vcat(ccf[1,i,j], ccf[2:p, j, i]))  # SymmetricToeplitz(ccf[1:p, i, j])
-        end
-    end
-    a = B\A
-
-    Σ  = ccf[1,:,:] - A'*a   # noise covariance matrix
-    lags = [-a[i:p:m*p, :] for i = 1:p]
-    mar = Dict([("A", lags), ("Σ", Σ), ("p", p)])
-    return mar
-end
-
-function mar2csd(mar, freqs, sf)
-    Σ = mar["Σ"]
-    p = mar["p"]
-    A = mar["A"]
-    nd = size(Σ, 1)
-    w  = 2*pi*freqs/sf    # freqs[end] is not the sampling frequency of the signal...
-    nf = length(w)
-	csd = zeros(ComplexF64, nf, nd, nd)
-	for i = 1:nf
-		af_tmp = I
-		for k = 1:p
-			af_tmp = af_tmp + A[k] * exp(-im * k * w[i])
-		end
-		iaf_tmp = inv(af_tmp)
-		csd[i,:,:] = iaf_tmp * Σ * iaf_tmp'     # is this really the covariance or rather precision?!
-	end
-    csd = 2*csd/sf
-    return csd
-end
-
-function mar2csd(mar, freqs)
-    sf = 2*freqs[end]
-    Σ = mar["Σ"]
-    p = mar["p"]
-    A = mar["A"]
-    nd = size(Σ, 1)
-    w  = 2pi*freqs/sf    # isn't it already transformed?? Is the original really in Hz? Also clearly freqs[end] is not the sampling frequency of the signal...
-    nf = length(w)
-	csd = zeros(ComplexF64, nf, nd, nd)
-	for i = 1:nf
-		af_tmp = I
-		for k = 1:p
-			af_tmp = af_tmp + A[k] * exp(-im * k * w[i])
-		end
-		iaf_tmp = inv(af_tmp)
-		csd[i,:,:] = iaf_tmp * Σ * iaf_tmp'     # is this really the covariance or rather precision?!
-	end
-    csd = 2*csd/sf
-    return csd
-end
-
 """
     Main function in which actually some interesting computation happens. This function implements equation 2 of the spectral DCM paper.
     Note that nomenclature is taken from SPM12 code and it does not seem to coincide with the spectral DCM paper's nomenclature. 
@@ -258,86 +67,6 @@ end
     Gn in the code corresponds to Ge in the paper, i.e. the observation noise. In the code global and local components are defined, no such distinction
     is discussed in the paper. In fact the parameter γ, corresponding to local component is not present in the paper.
 """
-function csd_approx(w, sts, derivatives, param)
-    # priors of spectral parameters
-    # ln(α) and ln(β), region specific fluctuations: ln(γ)
-    nw = length(w)
-    nd = size(x, 1)
-    α = param[:lnα]
-    β = param[:lnβ]
-    γ = param[:lnγ]
-    # define function that implements spectra given in equation (2) of the paper "A DCM for resting state fMRI".
-
-    # neuronal fluctuations, intrinsic noise (Gu) (1/f or AR(1) form)
-    Gu = zeros(nw, nd, nd)
-    Gn = zeros(nw, nd, nd)
-    G = w.^(-exp(α[2]))    # spectrum of hidden dynamics
-    G /= sum(G)
-    for i = 1:nd
-        Gu[:, i, i] .+= exp(α[1])*G
-    end
-    # region specific observation noise (1/f or AR(1) form)
-    G = w.^(-exp(β[2])/2)
-    G /= sum(G)
-    for i = 1:nd
-        Gn[:,i,i] .+= exp(γ[i])*G
-    end
-
-    # global components
-    for i = 1:nd
-        for j = i:nd
-            Gn[:,i,j] .+= exp(β[1])*G
-            Gn[:,j,i] = Gn[:,i,j]
-        end
-    end
-    S = transferfunction_fmri(w, sts, derivatives, param)   # This is K(ω) in the equations of the spectral DCM paper.
-
-    # predicted cross-spectral density
-    G = zeros(ComplexF64,nw,nd,nd);
-    for i = 1:nw
-        G[i,:,:] = S[i,:,:]*Gu[i,:,:]*S[i,:,:]'
-    end
-
-    return G + Gn
-end
-
-δ = Int∘==
-
-function csd_approx(f, x, w, μθ_pr, C, α::Matrix, β, γ, lnϵ, lndecay, lntransit)
-    # priors of spectral parameters
-    # region specific neuronal noise ln(α), general measurement noise ln(β), region specific measurement noise: ln(γ)
-    nw = length(w)
-    nd = size(μθ_pr, 1)
-
-    # define function that implements spectra given in equation (2) of the paper "A DCM for resting state fMRI".
-
-    # neuronal fluctuations, intrinsic noise (Gu) (1/f or AR(1) form)
-    Gu = zeros(nw, nd, nd)
-    Gn = zeros(nw, nd, nd)
-    for i = 1:nd
-        Gu[:, i, i] .+= exp(α[1, i]) .* w.^(-exp(α[2, i]))
-    end
-    # global components and region specific observation noise (1/f or AR(1) form)
-    for i = 1:nd
-        for j = i:nd
-            Gn[:,i,j] .+= (exp(β[1]) + δ(i,j)*exp(γ[i])) .* w.^(-exp(β[2])/2)
-            Gn[:,j,i] = Gn[:,i,j]
-        end
-    end
-    C = Matrix(I, nd, nd)     # here C is overwritten, whatever it was before, doesn't matter. This is SPM12 code, unclear how this makes sense.
-
-    S = transferfunction_fmri(x, w, μθ_pr, C, lnϵ, lndecay, lntransit)   # This is K(ω) in the equations of the spectral DCM paper.
-
-    # predicted cross-spectral density
-    G = zeros(ComplexF64,nw,nd,nd);
-    for i = 1:nw
-        G[i,:,:] = S[i,:,:]*Gu[i,:,:]*S[i,:,:]'
-    end
-
-    return G + Gn
-end
-
-
 function csd_approx(x, w, μθ_pr, C, α::Vector, β, γ, lnϵ, lndecay, lntransit)
     # priors of spectral parameters
     # region specific neuronal noise ln(α), general measurement noise ln(β), region specific measurement noise: ln(γ)
@@ -386,18 +115,6 @@ end
     Main function that computes the CSD: first arrange parameters, then call csd_approx which actually computes the CSD, and finally transform and back-transform to and from MAR.
     It is unclear why this last step is performed. A possible purpose is smoothing of the CSD, but this step is not documented anywhere and just taken as is from SPM12.
 """
-function csd_fmri_mtf(freqs, p, sts, derivatives, param)   # alongside the above realtes to spm_csd_fmri_mtf.m
-    G = csd_approx(freqs, sts, derivatives, param)
-    dt = 1/(2*freqs[end])
-    # the following two steps are very opaque. They are taken from the SPM code but it is unclear what the purpose of this transformation and back-transformation is
-    # in particular it is also unclear why the order of the MAR is reduced by 1. My best guess is that this procedure smoothens the results.
-    # But this does not correspond to any equation in the papers nor is it commented in the SPM12 code. Friston conferms that likely it is
-    # to make y well behaved.
-    mar = csd2mar(G, freqs, dt, p-1)
-    y = mar2csd(mar, freqs)
-    return y
-end
-
 function csd_fmri_mtf(x, freqs, p, param)   # alongside the above realtes to spm_csd_fmri_mtf.m
     dim = size(x, 1)
     μθ_pr = reshape(param[1:dim^2], dim, dim)
@@ -411,25 +128,14 @@ function csd_fmri_mtf(x, freqs, p, param)   # alongside the above realtes to spm
     G = csd_approx(x, freqs, μθ_pr, C, α, β, γ, lnϵ, lndecay, lntransit)
     dt = 1/(2*freqs[end])
 
+    # the following two steps are very opaque. They are taken from the SPM code but it is unclear what the purpose of this transformation and back-transformation is
+    # in particular it is also unclear why the order of the MAR is reduced by 1. My best guess is that this procedure smoothens the results.
+    # But this does not correspond to any equation in the papers nor is it commented in the SPM12 code. Friston conferms that likely it is
+    # to make y well behaved.
     mar = csd2mar(G, freqs, dt, p-1)
     y = mar2csd(mar, freqs)
     return y
 end
-
-function csd_lfp_mtf(f, x, freqs, p, param)   # alongside the above realtes to spm_csd_fmri_mtf.m
-    dim = size(x, 1)
-    μθ_pr = reshape(param[1:dim^2], dim, dim)
-    C = param[(1+dim^2):(dim+dim^2)]
-    lntransit = param[(1+dim+dim^2):(2dim+dim^2)]
-    lndecay = param[1+2dim+dim^2]
-    lnϵ = param[2+2dim+dim^2]
-    α = param[(3+2dim+dim^2):(2+2dim+2dim^2)]
-    β = param[(3+2dim+2dim^2):(4+2dim+2dim^2)]
-    γ = param[(5+2dim+2dim^2):(4+3dim+2dim^2)]
-    G = csd_approx(f, x, freqs, μθ_pr, C, α, β, γ, lnϵ, lndecay, lntransit)
-    return G
-end
-
 
 function diff(U, dx, f, param::Vector)
     nJ = size(U, 2)
