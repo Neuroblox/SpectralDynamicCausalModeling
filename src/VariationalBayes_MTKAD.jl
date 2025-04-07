@@ -14,9 +14,8 @@ Main functions to compute a spectral DCM.
 transferfunction : computes transfer function of neuronal model as well as measurement model
 csd_approx       : approximates CSD based on transfer functions
 csd_fmri_mtf     :
-diff             : computes Jacobian of model
 csd_Q            : computes precision component prior (which erroneously is not used in the SPM12 code for fMRI signals, it is used for other modalities)
-spm_logdet       : mimick SPM12's way to compute the logarithm of the determinant. Sometimes Julia's logdet won't work.
+spm_logdet       : mimick SPM's way to compute the logarithm of the determinant. Sometimes Julia's logdet won't work.
 variationalbayes : main routine that computes the variational Bayes estimate of model parameters
 """
 
@@ -177,7 +176,7 @@ end
     Arguments:
     - `data`        : dataframe with column names corresponding to the regions of measurement.
     - `model`       : MTK model, including state evolution and measurement.
-    - `initcond`    : dictionary of initial conditions, numerical values for all states
+    - `initcond`    : ordered dictionary of initial conditions: make sure that the ordering corresponds to the order of the model unknowns/variables
     - `csdsetup`    : dictionary of parameters required for the computation of the cross spectral density
     -- `dt`         : sampling interval
     -- `freq`       : frequencies at which to evaluate the CSD
