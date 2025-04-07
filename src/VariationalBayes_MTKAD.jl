@@ -238,7 +238,7 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
     )
 
     # variational laplace setup
-    vlsetup = VLSetup(
+    vlsetup = VLMTKSetup(
         f,                                    # function that computes the cross-spectral density at fixed point 'initcond'
         y_csd,                                # empirical cross-spectral density
         1e-1,                                 # tolerance
@@ -268,7 +268,7 @@ end
     - `priors`: Bayesian priors, mean and variance thereof. Laplace approximation assumes Gaussian distributions
     - `niter`: number of iterations of the optimization procedure
 """
-function run_spDCM_iteration!(state::VLState, setup::VLSetup)
+function run_spDCM_iteration!(state::VLState, setup::VLMTKSetup)
     (;μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ) = state
 
     f = setup.model_at_x0

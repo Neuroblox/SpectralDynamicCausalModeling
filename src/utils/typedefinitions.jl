@@ -33,8 +33,18 @@ mutable struct VLState
     dFdθθ::Matrix{Float64}       # free energy Hessian w.r.t. parameters
 end
 
-struct VLSetup{Model, T1 <: Array{ComplexF64}, T2 <: AbstractArray}
+struct VLMTKSetup{Model, T1 <: Array{ComplexF64}, T2 <: AbstractArray}
     model_at_x0::Model                        # model evaluated at initial conditions
+    y_csd::T1                                 # cross-spectral density approximated by fitting MARs to data
+    tolerance::Float64                        # convergence criterion
+    systemnums::Vector{Int}                   # several integers -> np: n. parameters, ny: n. datapoints, nq: n. Q matrices, nh: n. hyperparameters
+    systemvecs::Vector{Vector{Float64}}       # μθ_pr: prior expectation values of parameters and μλ_pr: prior expectation values of hyperparameters
+    systemmatrices::Vector{Matrix{Float64}}   # Πθ_pr: prior precision matrix of parameters, Πλ_pr: prior precision matrix of hyperparameters
+    Q::T2                                     # linear decomposition of precision matrix of parameters, typically just one matrix, the empirical correlation matrix
+    modelparam::OrderedDict
+end
+
+struct VLSetup{T1 <: Array{ComplexF64}, T2 <: AbstractArray}
     y_csd::T1                                 # cross-spectral density approximated by fitting MARs to data
     tolerance::Float64                        # convergence criterion
     systemnums::Vector{Int}                   # several integers -> np: n. parameters, ny: n. datapoints, nq: n. Q matrices, nh: n. hyperparameters
