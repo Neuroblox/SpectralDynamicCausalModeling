@@ -5,6 +5,7 @@ using ToeplitzMatrices
 using ExponentialUtilities
 using ForwardDiff
 using OrderedCollections
+using ComponentArrays
 using MetaGraphs
 using Graphs
 using ModelingToolkit
@@ -25,7 +26,7 @@ include("src/models/measurement_MTK.jl")
 include("src/utils/MTK_utilities.jl")
 
 ### Load data ###
-vars = matread("toydata/spm25_demo.mat");
+vars = matread("demodata/spm25_demo.mat");
 data = vars["data"];
 x = vars["x"];                       # initial condition of dynamic variabls
 nr = size(data, 2);                  # number of regions

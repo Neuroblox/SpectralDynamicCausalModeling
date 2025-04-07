@@ -1,24 +1,28 @@
-function integration_step(dfdx, f, v, solenoid=false)
+"""
+    integration_step(dfdx, f, v, solenoid=false)
+
+"""
+function integration_step(J, f, v, solenoid=false)
     if solenoid
         # add solenoidal mixing as is present in the later versions of SPM, in particular SPM25
-        L  = tril(dfdx);
+        L  = tril(J);
         Q  = L - L';
         Q  = Q/opnorm(Q, 2)/8;
 
-        f  = f  - Q*f;
-        dfdx = dfdx - Q*dfdx;        
+        f  = f - Q*f;
+        J = J - Q*J;
     end
 
     # NB: (exp(dfdx*t) - I)*inv(dfdx)*f, could also be done with expv (expv(t, dFdθθ, dFdθθ \ dFdθ) - dFdθθ \ dFdθ) but doesn't work with Dual.
     # Could also be done with `exponential!` but isn't numerically stable.
     # Thus, just use `exp`.
     n = length(f)
-    t = exp(v - spm_logdet(dfdx)/n)
+    t = exp(v - spm_logdet(J)/n)
 
     if t > exp(16)
-        dx = - dfdx \ f   # -inv(dfdx)*f
+        dx = - J \ f
     else
-        dx = (exp(t * dfdx) - I) * inv(dfdx) * f # (expm(dfdx*t) - I)*inv(dfdx)*f
+        dx = (exp(t * J) - I) * inv(J) * f
     end
 
     return dx

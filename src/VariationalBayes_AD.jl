@@ -11,13 +11,14 @@ include("utils/helperfunctions.jl")
 include("utils/helperfunctions_AD.jl")
 
 
-function transferfunction(x, w, θμ, C, lnϵ, lndecay, lntransit)
+function transferfunction(x, w, params)
     # compute transfer function of Volterra kernels, see fig 1 in friston2014
     # 1. compute jacobian w.r.t. f ; TODO: what is it with this "delay operator" that is set to 1 in "spm_fx_fmri.m"
     # J_x = jacobian(f, x0) # well, no need to perform this for a linear system... we already have it: θμ
-    C /= 16.0   # TODO: unclear why it is devided by 16 but see spm_fx_fmri.m:49
+    C = params.C/16.0   # TODO: unclear why it is devided by 16 but see spm_fx_fmri.m:49
     # 2. get jacobian of hemodynamics
-    J = hemodynamics_jacobian(x[:, 2:end], lndecay, lntransit)
+    J = hemodynamics_jacobian(x[:, 2:end], params.lnκ, params.lnτ)
+    θμ = params.A
     θμ -= diagm(exp.(diag(θμ))/2 + diag(θμ))
     # if I eventually need also the change of variables rather than just the derivative then here is where to fix it!
     nd = size(θμ, 1)
@@ -27,19 +28,13 @@ function transferfunction(x, w, θμ, C, lnϵ, lndecay, lntransit)
     dfdu = [C;
             zeros(size(J,1), size(C, 2))]
 
-    F = eigen(J_tot) #, sortby=nothing, permute=true)
+    F = eigen(J_tot)
     Λ = F.values
     V = F.vectors
-    # condition unstable eigenmodes
-    # if max(w) > 1
-    #     s = 1j*imag(s) + real(s) - exp(real(s));
-    # else
-    #     s = 1j*imag(s) + min(real(s),-1/32);
-    # end
 
     # 3. get jacobian (??) of bold signal, just compute it as is done, but how is this a jacobian... it isn't! if anything it should be a gradient since the BOLD signal is scalar
     #TODO: implement numerical and compare with analytical: J_g = jacobian(bold, x0)
-    dgdx = boldsignal(x, lnϵ)[2]
+    dgdx = boldsignal(x, params.lnϵ)[2]
     dgdv = dgdx * @view V[end-size(dgdx,2)+1:end, :]     # TODO: not a clean solution, also not in the original code since it seems that the code really depends on the ordering of eigenvalues and respectively eigenvectors!
     dvdu = V\dfdu
 
@@ -47,11 +42,7 @@ function transferfunction(x, w, θμ, C, lnϵ, lndecay, lntransit)
     ng = size(dgdx,1)         # number of outputs
     nu = size(dfdu,2)         # number of inputs
     nk = size(V,2)            # number of modes
-    # if real(eltype(dvdu)) <: Dual
-    #     S = zeros(Dual{tagtype(real(dvdu[1])), ComplexF64, length(real(dvdu[1]).partials)}, nw, ng, nu)    
-    # else
     S = zeros(Complex{real(eltype(dvdu))}, nw, ng, nu)
-    # end
     for j = 1:nu
         for i = 1:ng
             for k = 1:nk
@@ -64,94 +55,9 @@ function transferfunction(x, w, θμ, C, lnϵ, lndecay, lntransit)
     return S
 end
 
-function csd2mar(csd, w, dt, p)
-    # TODO: investiagate why SymmetricToeplitz(ccf[1:p, i, j]) is not good to be used but instead need to use Toeplitz(ccf[1:p, i, j], ccf[1:p, j, i])
-    # as is done in the original MATLAB code (confront comment there). ccf should be a symmetric matrix so there should be no difference between the
-    # Toeplitz matrices but for the second jacobian (J[2], see for loop for i = 1:nJ in function diff) the computation produces subtle differences between
-    # the two versions.
-    dw = w[2] - w[1]
-    w = w/dw
-    ns = dt^-1
-    N = ceil(Int64, ns/2/dw)
-    gj = findall(x -> x > 0 && x < (N + 1), w)
-    gi = gj .+ (ceil(Int64, w[1]) - 1)    # TODO: figure out what's the purpose of this!
-    g = zeros(eltype(csd), N)
+# function csd_approx(ω, derivatives, params, params_idx)
 
-    # transform to cross-correlation function
-    ccf = zeros(eltype(csd), N*2+1, size(csd,2), size(csd,3))
-    for i = 1:size(csd, 2)
-        for j = 1:size(csd, 3)
-            g[gi] = csd[gj,i,j]
-            f = idft(g)
-            f = idft(vcat([0.0im; g; conj(g[end:-1:1])]))
-            ccf[:,i,j] = real.(fftshift(f))*N*dw
-        end
-    end
-
-    # MAR coefficients
-    N = size(ccf,1)
-    m = size(ccf,2)
-    n = (N - 1) ÷ 2
-    p = min(p, n - 1)
-    ccf = ccf[(1:n) .+ n,:,:]
-    A = zeros(eltype(csd), m*p, m)
-    B = zeros(eltype(csd), m*p, m*p)
-    for i = 1:m
-        for j = 1:m
-            A[((i-1)*p+1):i*p, j] = ccf[(1:p) .+ 1, i, j]
-            B[((i-1)*p+1):i*p, ((j-1)*p+1):j*p] = Toeplitz(ccf[1:p, i, j], vcat(ccf[1,i,j], ccf[2:p, j, i]))  # SymmetricToeplitz(ccf[1:p, i, j])
-        end
-    end
-    a = B\A
-
-    Σ  = ccf[1,:,:] - A'*a   # noise covariance matrix
-    lags = [-a[i:p:m*p, :] for i = 1:p]
-    mar = Dict([("A", lags), ("Σ", Σ), ("p", p)])
-    return mar
-end
-
-function mar2csd(mar, freqs, sf)
-    Σ = mar["Σ"]
-    p = mar["p"]
-    A = mar["A"]
-    nd = size(Σ, 1)
-    w  = 2*pi*freqs/sf    # isn't it already transformed?? Is the original really in Hz? Also clearly freqs[end] is not the sampling frequency of the signal...
-    nf = length(w)
-	csd = zeros(ComplexF64, nf, nd, nd)
-	for i = 1:nf
-		af_tmp = I
-		for k = 1:p
-			af_tmp = af_tmp + A[k] * exp(-im * k * w[i])
-		end
-		iaf_tmp = inv(af_tmp)
-		csd[i,:,:] = iaf_tmp * Σ * iaf_tmp'     # is this really the covariance or rather precision?!
-	end
-    csd = 2*csd/sf
-    return csd
-end
-
-function mar2csd(mar, freqs)
-    sf = 2*freqs[end]
-    Σ = mar["Σ"]
-    p = mar["p"]
-    A = mar["A"]
-    nd = size(Σ, 1)
-    w  = 2pi*freqs/sf    # TODO: isn't it already transformed?? Is the original really in Hz? Also clearly freqs[end] is not the sampling frequency of the signal...
-    nf = length(w)
-	csd = zeros(eltype(Σ), nf, nd, nd)
-	for i = 1:nf
-		af_tmp = I
-		for k = 1:p
-			af_tmp = af_tmp + A[k] * exp(-im * k * w[i])
-		end
-		iaf_tmp = inv(af_tmp)
-		csd[i,:,:] = iaf_tmp * Σ * iaf_tmp'     # is this really the covariance or rather precision?!
-	end
-    csd = 2*csd/sf
-    return csd
-end
-
-@views function csd_approx(x, w, θμ, C, α, β, γ, lnϵ, lndecay, lntransit)
+@views function csd_approx(x, ω, params)
     # priors of spectral parameters
     # ln(α) and ln(β), region specific fluctuations: ln(γ)
     nw = length(w)
@@ -192,17 +98,8 @@ end
     return G_final
 end
 
-@views function csd_fmri_mtf(x, freqs, p, param)
-    dim = size(x, 1)
-    θμ = reshape(param[1:dim^2], dim, dim)
-    C = param[(1+dim^2):(dim+dim^2)]
-    lntransit = param[(1+dim+dim^2):(2dim+dim^2)]
-    lndecay = param[1+2dim+dim^2]
-    lnϵ = param[2+2dim+dim^2]
-    α = param[[3+2dim+dim^2, 5+2dim+dim^2]]
-    β = param[[4+2dim+dim^2, 6+2dim+dim^2]]
-    γ = param[(7+2dim+dim^2):(6+3dim+dim^2)]
-    G = csd_approx(x, freqs, θμ, C, α, β, γ, lnϵ, lndecay, lntransit)
+function csd_fmri_mtf(x, freqs, p, param)
+    G = csd_approx(x, freqs, param)
     dt  = 1/(2*freqs[end])
     mar = csd2mar(G, freqs, dt, p-1)
     y = mar2csd(mar, freqs)
@@ -223,6 +120,86 @@ mutable struct vb_state
     μθ_po::Vector{Float64}
     Σθ::Matrix{Float64}
 end
+
+"""
+    function setup_sDCM(data, stateevolutionmodel, initcond, csdsetup, priors, hyperpriors, indices)
+
+    Interface function to performs variational inference to fit model parameters to empirical cross spectral density.
+    The current implementation provides a Variational Laplace fit (see function above `variationalbayes`).
+
+    Arguments:
+    - `data`        : dataframe with column names corresponding to the regions of measurement.
+    - `initcond`    : dictionary of initial conditions, numerical values for all states
+    - `csdsetup`    : dictionary of parameters required for the computation of the cross spectral density
+    -- `dt`         : sampling interval
+    -- `freq`       : frequencies at which to evaluate the CSD
+    -- `p`          : order parameter of the multivariate autoregression model
+    - `priors`      : dataframe of parameters with the following columns:
+    -- `name`       : corresponds to MTK model name
+    -- `mean`       : corresponds to prior mean value
+    -- `variance`   : corresponds to the prior variances
+    - `hyperpriors` : dataframe of parameters with the following columns:
+    -- `Πλ_pr`      : prior precision matrix for λ hyperparameter(s)
+    -- `μλ_pr`      : prior mean(s) for λ hyperparameter(s)
+    - `indices`  : indices to separate model parameters from other parameters. Needed for the computation of AD gradient.
+"""
+function setup_spDCM(data, initcond, csdsetup, priors, hyperpriors)
+    # compute cross-spectral density
+    dt = csdsetup.dt;                      # order of MAR. Hard-coded in SPM12 with this value. We will use the same for now.
+    freq = csdsetup.freq;                  # frequencies at which the CSD is evaluated
+    mar_order = csdsetup.mar_order;        # order of MAR
+    mar = mar_ml(data, mar_order);         # compute MAR from time series y and model order p
+    y_csd = mar2csd(mar, freq, dt^-1);     # compute cross spectral densities from MAR parameters at specific frequencies freqs, dt^-1 is sampling rate of data
+
+    derivatives = par -> jacobian(f_at(addnontunableparams(par, model), t), initcond)
+
+    μθ_pr = vecparam(priors.μθ_pr)        # note: μθ_po is posterior and μθ_pr is prior
+    Σθ_pr = diagm(vecparam(priors.Σθ_pr))
+
+    ### Collect prior means and covariances ###
+    if haskey(hyperpriors, :Q)
+        Q = hyperpriors.Q;
+    else
+        Q = csd_Q(y_csd);             # compute functional connectivity prior Q. See Friston etal. 2007 Appendix A
+    end
+    nq = 1                            # TODO: this is hard-coded, need to make this compliant with csd_Q
+    nh = size(Q, 3)                   # number of precision components (this is the same as above, but may differ)
+    nr = length(indices[:lnγ])        # region specific noise parameter can be used to get the number of regions
+
+    f = params -> csd_mtf(freq, mar_order, derivatives, params, indices, modality)
+
+    np = length(μθ_pr)     # number of parameters
+    ny = length(y_csd)     # total number of response variables
+
+    # variational laplace state variables
+    vlstate = VLState(
+        0,                                   # iter
+        -4,                                  # log ascent rate
+        [-Inf],                              # free energy
+        Float64[],                           # delta free energy
+        hyperpriors.μλ_pr,                   # metaparameter, initial condition.
+        zeros(np),                           # parameter estimation error ϵ_θ
+        [zeros(np), hyperpriors.μλ_pr],      # memorize reset state
+        μθ_pr,                               # parameter posterior mean
+        Σθ_pr,                               # parameter posterior covariance
+        zeros(np),
+        zeros(np, np)
+    )
+
+    # variational laplace setup
+    vlsetup = VLSetup(
+        f,                                    # function that computes the cross-spectral density at fixed point 'initcond'
+        y_csd,                                # empirical cross-spectral density
+        1e-1,                                 # tolerance
+        [nr, np, ny, nq, nh],                 # number of parameters, number of data points, number of Qs, number of hyperparameters
+        [μθ_pr, hyperpriors.μλ_pr],           # parameter and hyperparameter prior mean
+        [inv(Σθ_pr), hyperpriors.Πλ_pr],      # parameter and hyperparameter prior precision matrices
+        Q,                                    # components of data precision matrix
+        modelparam
+    )
+    return (vlstate, vlsetup)
+end
+
 
 @views function variationalbayes(x, y, w, V, p, priors, niter)
     # extract priors

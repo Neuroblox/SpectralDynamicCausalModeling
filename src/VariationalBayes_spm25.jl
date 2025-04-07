@@ -184,43 +184,56 @@ function csd_Q(csd)
     return inv(Q .+ opnorm(Q, 1)/32*Matrix(I, size(Q)))
 end
 
-mutable struct vb_state
-    iter::Int
-    F::Float64
-    λ::Vector{Float64}
-    ϵ_θ::Vector{Float64}
-    μθ_po::Vector{Float64}
-    Σθ_po::Matrix{Float64}
-end
+# mutable struct vb_state
+#     iter::Int
+#     F::Float64
+#     λ::Vector{Float64}
+#     ϵ_θ::Vector{Float64}
+#     μθ_po::Vector{Float64}
+#     Σθ_po::Matrix{Float64}
+# end
+# mutable struct VLState
+#     iter::Int                    # number of iteration
+#     v::Float64                   # log ascent rate of SPM style Levenberg-Marquardt optimization
+#     F::Vector{Float64}           # free energy vector (store at each iteration)
+#     dF::Vector{Float64}          # predicted free energy changes (store at each iteration)
+#     λ::Vector{Float64}           # hyperparameter
+#     ϵ_θ::Vector{Float64}         # prediction error of parameters θ
+#     reset_state::Vector{Any}     # store state to reset to [ϵ_θ and λ] when the free energy gets worse rather than better
+#     μθ_po::Vector{Float64}       # posterior expectation value of parameters 
+#     Σθ_po::Matrix{Float64}       # posterior covariance matrix of parameters
+#     dFdθ::Vector{Float64}        # free energy gradient w.r.t. parameters
+#     dFdθθ::Matrix{Float64}       # free energy Hessian w.r.t. parameters
+# end
 
-function vecparam(param::OrderedDict{Any,Any})
-    flatparam = Float64[]
-    for v in values(param)
-        if (typeof(v) <: Array)
-            for vv in v
-                push!(flatparam, vv)
-            end
-        else
-            push!(flatparam, v)
-        end
-    end
-    return flatparam
-end
+# function vecparam(param::OrderedDict{Any,Any})
+#     flatparam = Float64[]
+#     for v in values(param)
+#         if (typeof(v) <: Array)
+#             for vv in v
+#                 push!(flatparam, vv)
+#             end
+#         else
+#             push!(flatparam, v)
+#         end
+#     end
+#     return flatparam
+# end
 
-function unvecparam(vals, param::OrderedDict{Any,Any})
-    iter = 1
-    paramnewvals = copy(param)
-    for (k, v) in param
-        if (typeof(v) <: Array)
-            paramnewvals[k] = vals[iter:iter+length(v)-1]
-            iter += length(v)
-        else
-            paramnewvals[k] = vals[iter]
-            iter += 1
-        end
-    end
-    return paramnewvals
-end
+# function unvecparam(vals, param::OrderedDict{Any,Any})
+#     iter = 1
+#     paramnewvals = copy(param)
+#     for (k, v) in param
+#         if (typeof(v) <: Array)
+#             paramnewvals[k] = vals[iter:iter+length(v)-1]
+#             iter += length(v)
+#         else
+#             paramnewvals[k] = vals[iter]
+#             iter += 1
+#         end
+#     end
+#     return paramnewvals
+# end
 
 
 # """
@@ -452,6 +465,8 @@ end
 
 #     return state
 # end
+
+
 
 function variationalbayes(x, y, w, V, p, priors, niter)    # relates to spm_nlsi_GN.m
     # extract priors
