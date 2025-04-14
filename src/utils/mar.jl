@@ -190,8 +190,8 @@ function mar_ml(y, p)
 
     A = (Y*X')/(X*X')
     ϵ = Y - A*X
-    Σ = ϵ*ϵ'/ns     #(ns-p-p*nd-1)
-    A = -[A[:, (i-1)*nd+1:i*nd] for i = 1:p]    # flip sign to be consistent with SPM12 convention
+    Σ = ϵ*ϵ'/ns     # unbiased estimator requires the following denominator (ns-p-p*nd-1), the current is consistent with SPM
+    A = -[A[:, (i-1)*nd+1:i*nd] for i = 1:p]    # flip sign to be consistent with SPM convention
     mar = Dict([("A", A), ("Σ", Σ), ("p", p)])
     return mar
 end
@@ -226,7 +226,7 @@ function mar2csd(mar, freqs, sf)
     nd = size(Σ, 1)
     w  = 2*pi*freqs/sf
     nf = length(w)
-	csd = zeros(ComplexF64, nf, nd, nd)
+    csd = zeros(ComplexF64, nf, nd, nd)
 	for i = 1:nf
 		af_tmp = I
 		for k = 1:p
@@ -241,7 +241,23 @@ end
 
 function mar2csd(mar, freqs)
     sf = 2*freqs[end]   # freqs[end] is not the sampling frequency of the signal... not sure about this step.
-    return mar2csd(mar, freqs, sf)
+    Σ = mar["Σ"]
+    p = mar["p"]
+    A = mar["A"]
+    nd = size(Σ, 1)
+    w  = 2pi*freqs/sf
+    nf = length(w)
+    csd = zeros(eltype(Σ), nf, nd, nd)
+    for i = 1:nf
+        af_tmp = I
+        for k = 1:p
+            af_tmp = af_tmp + A[k] * exp(-im * k * w[i])
+        end
+        iaf_tmp = inv(af_tmp)
+        csd[i,:,:] = iaf_tmp * Σ * iaf_tmp'
+    end
+    csd = 2*csd/sf
+    return csd
 end
 
 

@@ -29,6 +29,23 @@ function integration_step(J, f, v, solenoid=false)
 end
 
 """
+    function removezerovardims(M)
+    Note that this helper function is used to remove dimensions with zero variance from the prior covariance matrix since they are fixed.
+    In SPM covariance matrices with non-diagonal elements will undergo an SVD decomposition, here we only deal with diagonal matrices for now.
+"""
+function removezerovardims(M)
+    idx = findall(x -> x != 0, M);
+    V = zeros(size(M, 1), length(idx));
+    order = sortperm(M[idx], rev=true);
+    idx = idx[order];
+    for i = 1:length(idx)
+        V[idx[i][1], i] = 1.0
+    end
+    A = V'*M*V;       # redimension matrix by removing columns and rows that have zero entries
+
+    return (A, V)
+end
+"""
     vecparam(param::OrderedDict)
 
     Function to flatten an ordered dictionary of model parameters and return a simple list of parameter values.
@@ -36,34 +53,34 @@ end
     Arguments:
     - `param`: dictionary of model parameters (may contain numbers and lists of numbers)
 """
-function vecparam(param::OrderedDict)
-    flatparam = Float64[]
-    for v in values(param)
-        if (typeof(v) <: Array)
-            for vv in v
-                push!(flatparam, vv)
-            end
-        else
-            push!(flatparam, v)
-        end
-    end
-    return flatparam
-end
+# function vecparam(param::OrderedDict)
+#     flatparam = Float64[]
+#     for v in values(param)
+#         if (typeof(v) <: Array)
+#             for vv in v
+#                 push!(flatparam, vv)
+#             end
+#         else
+#             push!(flatparam, v)
+#         end
+#     end
+#     return flatparam
+# end
 
-function unvecparam(vals, param::OrderedDict)
-    iter = 1
-    paramnewvals = copy(param)
-    for (k, v) in param
-        if (typeof(v) <: Array)
-            paramnewvals[k] = vals[iter:iter+length(v)-1]
-            iter += length(v)
-        else
-            paramnewvals[k] = vals[iter]
-            iter += 1
-        end
-    end
-    return paramnewvals
-end
+# function unvecparam(vals, param::OrderedDict)
+#     iter = 1
+#     paramnewvals = copy(param)
+#     for (k, v) in param
+#         if (typeof(v) <: Array)
+#             paramnewvals[k] = vals[iter:iter+length(v)-1]
+#             iter += length(v)
+#         else
+#             paramnewvals[k] = vals[iter]
+#             iter += 1
+#         end
+#     end
+#     return paramnewvals
+# end
 
 """
     function spm_logdet(M)

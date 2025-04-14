@@ -1,6 +1,3 @@
-# Hemodynamics and bold signal all in one
-using ModelingToolkit
-
 @parameters t
 D = Differential(t)
 
