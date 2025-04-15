@@ -1,5 +1,7 @@
 using LinearAlgebra: Eigen
 using ChainRules: _eigen_norm_phase_fwd!
+using ForwardDiff: Dual, Partials, jacobian
+ForwardDiff.can_dual(::Type{Complex{Float64}}) = true
 
 
 """

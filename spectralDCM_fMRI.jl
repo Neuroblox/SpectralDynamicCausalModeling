@@ -10,8 +10,11 @@ using ModelingToolkit   # need for typedefinitions even if no symbolic procedure
 
 include("src/utils/typedefinitions.jl")
 include("src/models/hemodynamic_response.jl")     # hemodynamic and BOLD signal model
-include("src/VariationalBayes_AD.jl")             # switch between _spm and _AD version.
+include("src/transferfunction.jl")
+include("src/utils/helperfunctions.jl")
+include("src/VariationalBayes_spm25.jl")             # switch between _spm and _AD version.
 include("src/utils/mar.jl")                       # multivariate auto-regressive model functions
+include("src/spDCMsetup.jl")
 
 ### get data and compute cross spectral density which is the actual input to the spectral DCM ###
 vars = matread("demodata/spm25_demo.mat");
