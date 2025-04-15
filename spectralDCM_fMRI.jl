@@ -12,7 +12,7 @@ include("src/utils/typedefinitions.jl")
 include("src/models/hemodynamic_response.jl")     # hemodynamic and BOLD signal model
 include("src/transferfunction.jl")
 include("src/utils/helperfunctions.jl")
-include("src/VariationalBayes_spm25.jl")             # switch between _spm and _AD version.
+include("src/optimization_spm25.jl")             # switch between _spm and _AD version.
 include("src/utils/mar.jl")                       # multivariate auto-regressive model functions
 include("src/spDCMsetup.jl")
 
