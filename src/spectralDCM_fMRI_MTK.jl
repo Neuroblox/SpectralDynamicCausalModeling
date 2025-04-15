@@ -2,30 +2,32 @@ using LinearAlgebra
 using MKL
 using FFTW
 using ToeplitzMatrices
-using ExponentialUtilities
 using ForwardDiff
 using OrderedCollections
 using ComponentArrays
 using MetaGraphs
 using Graphs
 using ModelingToolkit
-using DataFrames
+# using DataFrames
 using MAT
 
 include("utils/typedefinitions.jl")
 include("utils/helperfunctions.jl")
+include("utils/helperfunctions_AD.jl")
 include("utils/spDCMsetup.jl")
 include("variationallaplace/transferfunction.jl")
-include("variationallaplace/optimization_MTKAD.jl")
+include("variationallaplace/optimization.jl")
 include("utils/mar.jl")
 include("models/neuraldynamics_MTK.jl")
 include("models/measurement_MTK.jl")
 include("utils/MTK_utilities.jl")
 
+const t = ModelingToolkit.t_nounits
+const D = ModelingToolkit.D_nounits
+
 ### Load data ###
 vars = matread("demodata/spm25_demo.mat");
 data = vars["data"];
-x = vars["x"];                       # initial condition of dynamic variabls
 nr = size(data, 2);                  # number of regions
 max_iter = 128                       # maximum number of iterations
 
@@ -79,7 +81,7 @@ map(x->push!(rnames, split(string(x), "₊")[1]), sts);
 rnames = unique(rnames);
 for (i, r) in enumerate(rnames)
     for (j, s) in enumerate(sts[r .== map(x -> x[1], split.(string.(sts), "₊"))])
-        initcond[s] = x[i, j]
+        initcond[s] = vars["x"][i, j]
     end
 end
 

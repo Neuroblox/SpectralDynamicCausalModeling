@@ -3,7 +3,6 @@ using MKL
 using FFTW
 using ToeplitzMatrices
 using MAT
-using ExponentialUtilities
 using ForwardDiff
 using ComponentArrays
 # both of the following are needed for typedefinitions even if no symbolic procedure is used
@@ -14,7 +13,8 @@ include("utils/typedefinitions.jl")
 include("models/hemodynamic_response.jl")     # hemodynamic and BOLD signal model
 include("variationallaplace/transferfunction.jl")
 include("utils/helperfunctions.jl")
-include("variationallaplace/optimization_AD.jl")             # switch between _spm and _AD version.
+include("utils/helperfunctions_AD.jl")
+include("variationallaplace/optimization.jl")             # switch between _spm and _AD version.
 include("utils/mar.jl")                       # multivariate auto-regressive model functions
 include("utils/spDCMsetup.jl")
 
@@ -23,6 +23,7 @@ vars = matread("demodata/spm25_demo.mat");
 max_iter = 128
 data = vars["data"];
 nr = size(data, 2);
+dx = exp(-8)             # precision of finite differencing
 
 ### Define priors and initial conditions ###
 initcond = vars["x"];                       # initial condition of dynamic variabls

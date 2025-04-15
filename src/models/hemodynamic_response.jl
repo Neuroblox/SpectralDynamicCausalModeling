@@ -1,6 +1,3 @@
-@parameters t
-D = Differential(t)
-
 """
 Issue with parameters at level0, see parameterscoping.
 """

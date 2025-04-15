@@ -1,6 +1,3 @@
-using OrderedCollections
-const t = ModelingToolkit.t_nounits
-const D = ModelingToolkit.D_nounits
 
 function defaultprior(model, nrr)
     _, idx_sts = get_dynamic_states(model)
