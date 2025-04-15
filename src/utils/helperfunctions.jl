@@ -53,19 +53,19 @@ end
     Arguments:
     - `param`: dictionary of model parameters (may contain numbers and lists of numbers)
 """
-# function vecparam(param::OrderedDict)
-#     flatparam = Float64[]
-#     for v in values(param)
-#         if (typeof(v) <: Array)
-#             for vv in v
-#                 push!(flatparam, vv)
-#             end
-#         else
-#             push!(flatparam, v)
-#         end
-#     end
-#     return flatparam
-# end
+function vecparam(param::OrderedDict)
+    flatparam = Float64[]
+    for v in values(param)
+        if (typeof(v) <: Array)
+            for vv in v
+                push!(flatparam, vv)
+            end
+        else
+            push!(flatparam, v)
+        end
+    end
+    return flatparam
+end
 
 # function unvecparam(vals, param::OrderedDict)
 #     iter = 1

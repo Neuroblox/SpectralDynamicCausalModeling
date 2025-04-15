@@ -2,6 +2,153 @@ using ForwardDiff: Dual
 tagtype(::Dual{T,V,N}) where {T,V,N} = T
 
 
+function transferfunction(ω, derivatives, params, indices)
+    ∂f = derivatives(params[indices[:dspars]])
+    # dissect into Jacobian w.r.t. dynamic variables as well as partial derivatives wrt input variables and gradient of measurement function
+    ∂f∂x = ∂f[indices[:sts], indices[:sts]]
+    ∂f∂u = ∂f[indices[:sts], indices[:u]]
+    ∂g∂x = ∂f[indices[:m], indices[:sts]]
+
+    F = eigen(∂f∂x)
+    Λ = F.values
+    V = F.vectors
+
+    ∂g∂v = ∂g∂x*V
+    ∂v∂u = V\∂f∂u              # u is external variable.
+
+    nω = size(ω, 1)            # number of frequencies
+    ng = size(∂g∂x, 1)         # number of outputs
+    nu = size(∂v∂u, 2)         # number of inputs
+    nk = size(V, 2)            # number of modes
+    S = zeros(Complex{real(eltype(∂v∂u))}, nω, ng, nu)
+    for j = 1:nu
+        for i = 1:ng
+            for k = 1:nk
+                # transfer functions (FFT of kernel)
+                Sk = (1im*2*pi*ω .- Λ[k]).^-1
+                S[:,i,j] .+= ∂g∂v[i,k]*∂v∂u[k,j]*Sk
+            end
+        end
+    end
+
+    return S
+end
+
+
+"""
+    This function implements equation 2 of the spectral DCM paper, Friston et al. 2014 "A DCM for resting state fMRI".
+    Note that nomenclature is taken from SPM12 code and it does not seem to coincide with the spectral DCM paper's nomenclature. 
+    For instance, Gu should represent the spectral component due to external input according to the paper. However, in the code this represents
+    the hidden state fluctuations (which are called Gν in the paper).
+    Gn in the code corresponds to Ge in the paper, i.e. the observation noise. In the code global and local components are defined, no such distinction
+    is discussed in the paper. In fact the parameter γ, corresponding to local component is not present in the paper.
+"""
+function csd_approx(ω, derivatives, params, params_idx)
+    # priors of spectral parameters
+    # ln(α) and ln(β), region specific fluctuations: ln(γ)
+    nω = length(ω)
+    nd = length(params_idx[:lnγ])
+    α = params[params_idx[:lnα]]
+    β = params[params_idx[:lnβ]]
+    γ = params[params_idx[:lnγ]]
+    
+    # define function that implements spectra given in equation (2) of the paper "A DCM for resting state fMRI".
+
+    # neuronal fluctuations, intrinsic noise (Gu) (1/f or AR(1) form)
+    G = ω.^(-exp(α[2]))    # spectrum of hidden dynamics
+    G /= sum(G)
+    Gu = zeros(eltype(G), nω, nd, nd)
+    Gn = zeros(eltype(G), nω, nd, nd)
+    for i = 1:nd
+        Gu[:, i, i] .+= exp(α[1])*G
+    end
+    # region specific observation noise (1/f or AR(1) form)
+    G = ω.^(-exp(β[2])/2)
+    G /= sum(G)
+    for i = 1:nd
+        Gn[:,i,i] .+= exp(γ[i])*G
+    end
+
+    # global components
+    for i = 1:nd
+        for j = i:nd
+            Gn[:,i,j] .+= exp(β[1])*G
+            Gn[:,j,i] = Gn[:,i,j]
+        end
+    end
+    S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
+
+    # predicted cross-spectral density
+    G = zeros(eltype(S), nω, nd, nd);
+    for i = 1:nω
+        G[i,:,:] = S[i,:,:]*Gu[i,:,:]*S[i,:,:]'
+    end
+
+    return G + Gn
+end
+
+
+function csd_approx_lfp(ω, derivatives, params, params_idx)
+    # priors of spectral parameters
+    # ln(α) and ln(β), region specific fluctuations: ln(γ)
+    nω = length(ω)
+    nd = length(params_idx[:lnγ])
+    α = reshape(params[params_idx[:lnα]], nd, nd)
+    β = params[params_idx[:lnβ]]
+    γ = params[params_idx[:lnγ]]
+
+    # define function that implements spectra given in equation (2) of the paper "A DCM for resting state fMRI".
+    Gu = zeros(eltype(α), nω, nd)   # spectrum of neuronal innovations or intrinsic noise or system noise
+    Gn = zeros(eltype(β), nω)   # global spectrum of channel noise or observation noise or external noise
+    Gs = zeros(eltype(γ), nω)   # region specific spectrum of channel noise or observation noise or external noise
+    for i = 1:nd
+        Gu[:, i] .+= exp(α[1, i]) .* ω.^(-exp(α[2, i]))
+    end
+    # global components and region specific observation noise (1/f or AR(1) form)
+    Gn = exp(β[1] - 2) * ω.^(-exp(β[2]))
+    Gs = exp(γ[1] - 2) * ω.^(-exp(γ[2]))  # this is really oddly implemented in SPM12. Completely unclear how this should be region specific
+
+    S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
+
+    # predicted cross-spectral density
+    G = zeros(eltype(S), nω, nd, nd);
+    for i = 1:nω
+        G[i,:,:] = S[i,:,:]*diagm(Gu[i,:])*S[i,:,:]'
+    end
+
+    for i = 1:nd
+        G[:,i,i] += Gs
+        for j = 1:nd
+            G[:,i,j] += Gn
+        end
+    end
+
+    return G
+end
+
+@views function csd_mtf(freqs, p, derivatives, params, params_idx, modality)   # alongside the above realtes to spm_csd_fmri_mtf.m
+    if modality == "fMRI"
+        G = csd_approx(freqs, derivatives, params, params_idx)
+
+        dt = 1/(2*freqs[end])
+        # the following two steps are very opaque. They are taken from the SPM code but it is unclear what the purpose of this transformation and back-transformation is
+        # in particular it is also unclear why the order of the MAR is reduced by 1. My best guess is that this procedure smoothens the results.
+        # But this does not correspond to any equation in the papers nor is it commented in the SPM12 code. NB: Friston conferms that likely it is
+        # to make y well behaved.
+        mar = csd2mar(G, freqs, dt, p-1)
+        y = mar2csd(mar, freqs)    
+    elseif modality == "LFP"
+        y = csd_approx_lfp(freqs, derivatives, params, params_idx)
+    end
+    if real(eltype(y)) <: Dual
+        y_vals = Complex.((p->p.value).(real(y)), (p->p.value).(imag(y)))
+        y_part = (p->p.partials).(real(y)) + (p->p.partials).(imag(y))*im
+        y = map((x1, x2) -> Dual{tagtype(real(y)[1]), ComplexF64, length(x2)}(x1, Partials(Tuple(x2))), y_vals, y_part)
+    end
+
+    return y
+end
+
 function transferfunction(x, ω, params)
     # compute transfer function of Volterra kernels, see fig 1 in friston2014
     C = diagm(params.C/16.0)   # division by 16 taken from SPM, see spm_fx_fmri.m:49

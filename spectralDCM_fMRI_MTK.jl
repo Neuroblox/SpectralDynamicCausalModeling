@@ -12,13 +12,10 @@ using ModelingToolkit
 using DataFrames
 using MAT
 
-#=
-TODO:
-    - explore adaptive connection strength between neural activity and hemodynamic response
-    - are there alternatives to small perturbations of initial conditions to introduce numerical stability?
-=#
-
 include("src/utils/typedefinitions.jl")
+include("src/utils/helperfunctions.jl")
+include("src/spDCMsetup.jl")
+include("src/transferfunction.jl")
 include("src/VariationalBayes_MTKAD.jl")
 include("src/utils/mar.jl")
 include("src/models/neuraldynamics_MTK.jl")
@@ -87,7 +84,7 @@ for (i, r) in enumerate(rnames)
 end
 
 pmean, pcovariance, indices = defaultprior(fullmodel, nr)
-# priors = DataFrame(name=[k for k in keys(modelparam)], mean=[m for m in values(modelparam)], variance=[v for v in values(paramvariance)])
+
 priors = (μθ_pr = pmean,
           Σθ_pr = pcovariance
 );

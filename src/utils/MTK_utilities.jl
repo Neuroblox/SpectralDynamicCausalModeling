@@ -1,3 +1,4 @@
+using OrderedCollections
 const t = ModelingToolkit.t_nounits
 const D = ModelingToolkit.D_nounits
 
@@ -46,7 +47,7 @@ function defaultprior(model, nrr)
             paramvariance[k] = 1/256.0;
         end
     end
-    return parammean, paramvariance, indices
+    return parammean, diagm(vecparam(paramvariance)), indices
 end
 
 ### Blox Connector and Utilities ###
