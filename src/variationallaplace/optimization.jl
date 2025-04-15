@@ -181,7 +181,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
     (Πθ_pr, Πλ_pr, V) = setup.systemmatrices
     Q = setup.Q
 
-    dfdp = jacobian(f, μθ_po) * V
+    dfdp = ForwardDiff.jacobian(f, μθ_po) * V
 
     norm_dfdp = opnorm(dfdp, Inf);
     revert = isnan(norm_dfdp) || norm_dfdp > exp(32);

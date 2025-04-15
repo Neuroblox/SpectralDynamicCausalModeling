@@ -150,7 +150,7 @@ for n in 2:10
         if iter >= 4
             criterion = state.dF[end-3:end] .< setup.tolerance
             if all(criterion)
-                print("convergence after ", iter, " steps, with free energy: ", state.F[end])
+                println("convergence after ", iter, " steps, with free energy: ", state.F[end])
                 break
             end
         end
@@ -167,7 +167,7 @@ for n in 2:10
         if iter >= 4
             criterion = state.dF[end-3:end] .< setup.tolerance
             if all(criterion)
-                print("convergence after ", iter, " steps, with free energy: ", state.F[end])
+                println("convergence after ", iter, " steps, with free energy: ", state.F[end])
                 break
             end
         end
@@ -184,7 +184,7 @@ for n in 2:10
         if iter >= 4
             criterion = state.dF[end-3:end] .< setup.tolerance
             if all(criterion)
-                print("convergence after ", iter, " steps, with free energy: ", state.F[end])
+                println("convergence after ", iter, " steps, with free energy: ", state.F[end])
                 break
             end
         end

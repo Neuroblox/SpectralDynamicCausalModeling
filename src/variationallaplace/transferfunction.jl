@@ -1,4 +1,3 @@
-using ForwardDiff: Dual
 tagtype(::Dual{T,V,N}) where {T,V,N} = T
 
 
