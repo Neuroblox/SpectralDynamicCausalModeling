@@ -6,15 +6,17 @@ using MAT
 using ExponentialUtilities
 using ForwardDiff
 using ComponentArrays
-using ModelingToolkit   # need for typedefinitions even if no symbolic procedure is used
+# both of the following are needed for typedefinitions even if no symbolic procedure is used
+using ModelingToolkit
+using OrderedCollections
 
-include("src/utils/typedefinitions.jl")
-include("src/models/hemodynamic_response.jl")     # hemodynamic and BOLD signal model
-include("src/transferfunction.jl")
-include("src/utils/helperfunctions.jl")
-include("src/optimization_spm25.jl")             # switch between _spm and _AD version.
-include("src/utils/mar.jl")                       # multivariate auto-regressive model functions
-include("src/spDCMsetup.jl")
+include("utils/typedefinitions.jl")
+include("models/hemodynamic_response.jl")     # hemodynamic and BOLD signal model
+include("variationallaplace/transferfunction.jl")
+include("utils/helperfunctions.jl")
+include("variationallaplace/optimization_AD.jl")             # switch between _spm and _AD version.
+include("utils/mar.jl")                       # multivariate auto-regressive model functions
+include("utils/spDCMsetup.jl")
 
 ### get data and compute cross spectral density which is the actual input to the spectral DCM ###
 vars = matread("demodata/spm25_demo.mat");

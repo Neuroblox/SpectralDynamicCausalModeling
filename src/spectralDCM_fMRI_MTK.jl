@@ -12,15 +12,15 @@ using ModelingToolkit
 using DataFrames
 using MAT
 
-include("src/utils/typedefinitions.jl")
-include("src/utils/helperfunctions.jl")
-include("src/spDCMsetup.jl")
-include("src/transferfunction.jl")
-include("src/VariationalBayes_MTKAD.jl")
-include("src/utils/mar.jl")
-include("src/models/neuraldynamics_MTK.jl")
-include("src/models/measurement_MTK.jl")
-include("src/utils/MTK_utilities.jl")
+include("utils/typedefinitions.jl")
+include("utils/helperfunctions.jl")
+include("utils/spDCMsetup.jl")
+include("variationallaplace/transferfunction.jl")
+include("variationallaplace/optimization_MTKAD.jl")
+include("utils/mar.jl")
+include("models/neuraldynamics_MTK.jl")
+include("models/measurement_MTK.jl")
+include("utils/MTK_utilities.jl")
 
 ### Load data ###
 vars = matread("demodata/spm25_demo.mat");

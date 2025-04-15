@@ -1,4 +1,4 @@
-include("utils/helperfunctions_AD.jl")
+include("../utils/helperfunctions_AD.jl")
 
 """
     variationalbayes(idx_A, y, derivatives, w, V, p, priors, niter)

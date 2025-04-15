@@ -1,24 +1,4 @@
-using ForwardDiff: Dual, Partials, jacobian
-ForwardDiff.can_dual(::Type{Complex{Float64}}) = true
-
-tagtype(::Dual{T,V,N}) where {T,V,N} = T
-
-include("utils/helperfunctions_AD.jl")
-
-"""
-VariationalBayes_MTKAD.jl
-
-Main functions to compute a spectral DCM.
-
-transferfunction : computes transfer function of neuronal model as well as measurement model
-csd_approx       : approximates CSD based on transfer functions
-csd_fmri_mtf     :
-csd_Q            : computes precision component prior (which erroneously is not used in the SPM12 code for fMRI signals, it is used for other modalities)
-spm_logdet       : mimick SPM's way to compute the logarithm of the determinant. Sometimes Julia's logdet won't work.
-variationalbayes : main routine that computes the variational Bayes estimate of model parameters
-"""
-
-
+include("../utils/helperfunctions_AD.jl")
 
 
 """
