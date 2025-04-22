@@ -38,32 +38,36 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
     μθ_pr = vecparam(priors.μθ_pr)        # note: μθ_po is posterior and μθ_pr is prior
     Σθ_pr = priors.Σθ_pr
 
-    ### Collect prior means and covariances ###
+    nr = size(y_csd, 2)    # get number of regions from data
+    np = length(μθ_pr)     # number of parameters
+    ny = length(y_csd)     # total number of response variables
+
+    ### complete hyperprior in case some fields are missing ###
+    if haskey(hyperpriors, :μλ_pr)
+        μλ_pr = hyperpriors.μλ_pr;
+    else
+        μλ_pr = ones(nr^2) .* (-log(var(y_csd[:])) + 4);             # compute prior means of λ which is also the prefactor of the matrix decomposition elements Q
+    end
     if haskey(hyperpriors, :Q)
         Q = hyperpriors.Q;
     else
         Q = csd_Q(y_csd);             # compute functional connectivity prior Q. See Friston etal. 2007 Appendix A
     end
-    nq = 1                            # TODO: this is hard-coded, need to make this compliant with csd_Q
+
     nh = size(Q, 3)                   # number of precision components (this is the same as above, but may differ)
-    nr = length(indices[:lnγ])        # region specific noise parameter can be used to get the number of regions
-
     f = params -> csd_mtf(freq, mar_order, derivatives, params, indices, modality)
-
-    np = length(μθ_pr)     # number of parameters
-    ny = length(y_csd)     # total number of response variables
 
     # variational laplace state variables
     vlstate = VLMTKState(
-        0,                                   # iter
-        -4,                                  # log ascent rate
-        [-Inf],                              # free energy
-        Float64[],                           # delta free energy
-        hyperpriors.μλ_pr,                   # metaparameter, initial condition.
-        zeros(np),                           # parameter estimation error ϵ_θ
-        [zeros(np), hyperpriors.μλ_pr],      # memorize reset state
-        μθ_pr,                               # parameter posterior mean
-        Σθ_pr,                               # parameter posterior covariance
+        0,                               # iter
+        -4,                              # log ascent rate
+        [-Inf],                          # free energy
+        Float64[],                       # delta free energy
+        μλ_pr,                           # metaparameter, initial condition.
+        zeros(np),                       # parameter estimation error ϵ_θ
+        [zeros(np), μλ_pr],              # memorize reset state
+        μθ_pr,                           # parameter posterior mean
+        Σθ_pr,                           # parameter posterior covariance
         zeros(np),
         zeros(np, np)
     )
@@ -111,34 +115,36 @@ function setup_spDCM(data, initcond, csdsetup, priors, hyperpriors)
     mar = mar_ml(data, mar_order);         # compute MAR from time series y and model order p
     y_csd = mar2csd(mar, freq, dt^-1);     # compute cross spectral densities from MAR parameters at specific frequencies freqs, dt^-1 is sampling rate of data
 
-    ### Collect prior means and covariances ###
+    nr = size(y_csd, 2)           # get number of regions from data
+    np = size(V, 2)               # number of parameters
+    ny = length(y_csd)            # total number of response variables (dimensions x number of frequencies)
+    ### complete hyperprior in case some fields are missing ###
     if haskey(hyperpriors, :Q)
         Q = hyperpriors.Q;
     else
         Q = csd_Q(y_csd);             # compute functional connectivity prior Q. See Friston etal. 2007 Appendix A
     end
-    nq = 1                            # TODO: this is hard-coded, need to make this compliant with csd_Q
-    nh = size(Q, 3)                   # number of precision components (this is the same as above, but may differ)
-    nr = size(priors.μθ_pr.A, 1)        # region specific noise parameter can be used to get the number of regions
+    nh = size(Q, 3)                   # number of precision components
+    if haskey(hyperpriors, :μλ_pr)
+        μλ_pr = hyperpriors.μλ_pr;
+    else
+        μλ_pr = ones(nr^2) .* (-log(var(y_csd[:])) + 4);    # compute prior means of λ which is also the prefactor of the matrix decomposition elements Q
+    end
 
     f = params -> csd_fmri_mtf(initcond, freq, mar_order, params)
 
     Σθ_pr, V = removezerovardims(priors.Σθ_pr)
 
-    np = size(V, 2)               # number of parameters
-    ny = length(y_csd)            # total number of response variables (dimensions x number of frequencies)
-
-
     # variational laplace state variables
     vlstate = VLState(
-        0,                                   # iter
-        -4,                                  # log ascent rate
-        [-Inf],                              # free energy
-        Float64[],                           # delta free energy
-        hyperpriors.μλ_pr,                   # metaparameter, initial condition.
-        zeros(np),                           # parameter estimation error ϵ_θ
-        [zeros(np), hyperpriors.μλ_pr],      # memorize reset state
-        priors.μθ_pr,                        # parameter posterior mean
+        0,                            # iter
+        -4,                           # log ascent rate
+        [-Inf],                       # free energy
+        Float64[],                    # delta free energy
+        μλ_pr,                        # metaparameter, initial condition.
+        zeros(np),                    # parameter estimation error ϵ_θ
+        [zeros(np), μλ_pr],           # memorize reset state
+        priors.μθ_pr,                 # parameter posterior mean
         Σθ_pr,                        # parameter posterior covariance
         zeros(np),
         zeros(np, np)
@@ -149,9 +155,9 @@ function setup_spDCM(data, initcond, csdsetup, priors, hyperpriors)
         f,                                    # function that computes the cross-spectral density at fixed point 'initcond'
         y_csd,                                # empirical cross-spectral density
         1e-1,                                 # tolerance
-        [nr, np, ny, nq, nh],                 # number of parameters, number of data points, number of Qs, number of hyperparameters
-        [priors.μθ_pr, hyperpriors.μλ_pr],           # parameter and hyperparameter prior mean
-        [inv(Σθ_pr), hyperpriors.Πλ_pr, V],      # parameter and hyperparameter prior precision matrices
+        [nr, np, ny, nh],                     # number of parameters, number of data points, number of Qs, number of hyperparameters
+        [priors.μθ_pr, hyperpriors.μλ_pr],    # parameter and hyperparameter prior mean
+        [inv(Σθ_pr), hyperpriors.Πλ_pr, V],   # parameter and hyperparameter prior precision matrices
         Q,                                    # components of data precision matrix
         priors.μθ_pr
     )
