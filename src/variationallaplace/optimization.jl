@@ -14,7 +14,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
 
     f = setup.model_at_x0
     y = setup.y_csd              # cross-spectral density
-    (_, np, ny, nq, nh) = setup.systemnums
+    (_, np, ny, nh) = setup.systemnums
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr, V) = setup.systemmatrices
     Q = setup.Q
@@ -75,19 +75,19 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
                 JPJ[:,:,i] = real(J'*P[:,:,i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[:,:,i])*nq - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
+                dFdλ[i] = (tr(PΣ[:,:,i]) - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))*nq/2
+                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))*1/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
         else
             # if nh == 1, do the followng simplifications to improve computational speed:          
-            # 1. replace trace(PΣ[1]) * nq by ny
+            # 1. replace trace(PΣ[1]) by ny
             # 2. replace JPJ[1] by Pp
             dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - tr(Σθ_po * Pp)/2;
 
-            # 3. replace trace(PΣ[1],PΣ[1]) * nq by ny
+            # 3. replace trace(PΣ[1],PΣ[1]) by ny
             dFdλλ[1, 1] = - ny/2;
         end
 
@@ -116,7 +116,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
 
     ## E-Step with Levenberg-Marquardt regularization    // comment from MATLAB code
     L = zeros(real(eltype(iΣ)), 3)
-    L[1] = (real(logdet(iΣ))*nq - real(dot(ϵ, iΣ, ϵ)) - ny*log(2pi))/2
+    L[1] = (real(logdet(iΣ)) - real(dot(ϵ, iΣ, ϵ)) - ny*log(2pi))/2
     L[2] = (logdet(Πθ_pr * Σθ_po) - dot(ϵ_θ, Πθ_pr, ϵ_θ))/2
     L[3] = (logdet(Πλ_pr * Σλ_po) - dot(ϵ_λ, Πλ_pr, ϵ_λ))/2
     F = sum(L)
@@ -176,7 +176,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
 
     f = setup.model_at_x0
     y = setup.y_csd              # cross-spectral density
-    (_, _, ny, nq, nh) = setup.systemnums
+    (_, _, ny, nh) = setup.systemnums
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr, V) = setup.systemmatrices
     Q = setup.Q
@@ -235,19 +235,19 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
                 JPJ[:,:,i] = real(J'*P[:,:,i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[:,:,i])*nq - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
+                dFdλ[i] = (tr(PΣ[:,:,i]) - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))*nq/2
+                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))*1/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
         else
             # if nh == 1, do the followng simplifications to improve computational speed:          
-            # 1. replace trace(PΣ[1]) * nq by ny
+            # 1. replace trace(PΣ[1]) by ny
             # 2. replace JPJ[1] by Pp
             dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - tr(Σθ_po * Pp)/2;
 
-            # 3. replace trace(PΣ[1],PΣ[1]) * nq by ny
+            # 3. replace trace(PΣ[1],PΣ[1]) by ny
             dFdλλ[1, 1] = - ny/2;
         end
 
@@ -276,7 +276,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
 
     ## E-Step with Levenberg-Marquardt regularization    // comment from MATLAB code
     L = zeros(real(eltype(iΣ)), 3)
-    L[1] = (real(logdet(iΣ))*nq - real(dot(ϵ, iΣ, ϵ)) - ny*log(2pi))/2
+    L[1] = (real(logdet(iΣ)) - real(dot(ϵ, iΣ, ϵ)) - ny*log(2pi))/2
     L[2] = (logdet(Πθ_pr * Σθ_po) - dot(ϵ_θ, Πθ_pr, ϵ_θ))/2
     L[3] = (logdet(Πλ_pr * Σλ_po) - dot(ϵ_λ, Πλ_pr, ϵ_λ))/2
     F = sum(L)
@@ -336,7 +336,7 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
 
     f = setup.model_at_x0
     y = setup.y_csd              # cross-spectral density
-    (nr, np, ny, nq, nh) = setup.systemnums
+    (nr, np, ny, nh) = setup.systemnums
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr) = setup.systemmatrices
     Q = setup.Q
@@ -395,19 +395,19 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
                 JPJ[:,:,i] = real(J'*P[:,:,i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[:,:,i])*nq - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
+                dFdλ[i] = (tr(PΣ[:,:,i]) - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))*nq/2
+                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
         else
             # if nh == 1, do the followng simplifications to improve computational speed:          
-            # 1. replace trace(PΣ[1]) * nq by ny
+            # 1. replace trace(PΣ[1]) by ny
             # 2. replace JPJ[1] by Pp
             dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - tr(Σθ_po * Pp)/2;
 
-            # 3. replace trace(PΣ[1],PΣ[1]) * nq by ny
+            # 3. replace trace(PΣ[1],PΣ[1]) by ny
             dFdλλ[1, 1] = - ny/2;
         end
 
@@ -436,7 +436,7 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
 
     ## E-Step with Levenberg-Marquardt regularization    // comment from MATLAB code
     L = zeros(real(eltype(iΣ)), 3)
-    L[1] = (real(logdet(iΣ))*nq - real(dot(ϵ, iΣ, ϵ)) - ny*log(2pi))/2
+    L[1] = (real(logdet(iΣ)) - real(dot(ϵ, iΣ, ϵ)) - ny*log(2pi))/2
     L[2] = (logdet(Πθ_pr * Σθ_po) - dot(ϵ_θ, Πθ_pr, ϵ_θ))/2
     L[3] = (logdet(Πλ_pr * Σλ_po) - dot(ϵ_λ, Πλ_pr, ϵ_λ))/2
     F = sum(L)
