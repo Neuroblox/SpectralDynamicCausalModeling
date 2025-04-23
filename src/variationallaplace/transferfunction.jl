@@ -91,21 +91,23 @@ function csd_approx_lfp(ω, derivatives, params, params_idx)
     # priors of spectral parameters
     # ln(α) and ln(β), region specific fluctuations: ln(γ)
     nω = length(ω)
-    nd = length(params_idx[:lnγ])
-    α = reshape(params[params_idx[:lnα]], nd, nd)
+    nd = length(params_idx[:u])
+    α = reshape(params[params_idx[:lnα]], 2, nd)
     β = params[params_idx[:lnβ]]
-    γ = params[params_idx[:lnγ]]
+    γ = reshape(params[params_idx[:lnγ]], 2, nd)
 
     # define function that implements spectra given in equation (2) of the paper "A DCM for resting state fMRI".
     Gu = zeros(eltype(α), nω, nd)   # spectrum of neuronal innovations or intrinsic noise or system noise
-    Gn = zeros(eltype(β), nω)   # global spectrum of channel noise or observation noise or external noise
-    Gs = zeros(eltype(γ), nω)   # region specific spectrum of channel noise or observation noise or external noise
+    Gn = zeros(eltype(β), nω)       # global spectrum of channel noise or observation noise or external noise
+    Gs = zeros(eltype(γ), nω, nd)   # region specific spectrum of channel noise or observation noise or external noise
     for i = 1:nd
         Gu[:, i] .+= exp(α[1, i]) .* ω.^(-exp(α[2, i]))
     end
     # global components and region specific observation noise (1/f or AR(1) form)
     Gn = exp(β[1] - 2) * ω.^(-exp(β[2]))
-    Gs = exp(γ[1] - 2) * ω.^(-exp(γ[2]))  # this is really oddly implemented in SPM12. Completely unclear how this should be region specific
+    for i = 1:nd
+        Gs[:, i] .+= exp(γ[1, i] - 2) .* ω.^(-exp(γ[2, 1]))  # this is really oddly implemented in SPM, the exponent parameter is kept fixed, leaving parameters that essentially don't matter
+    end
 
     S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
 
@@ -116,7 +118,7 @@ function csd_approx_lfp(ω, derivatives, params, params_idx)
     end
 
     for i = 1:nd
-        G[:,i,i] += Gs
+        G[:,i,i] += Gs[:,i]
         for j = 1:nd
             G[:,i,j] += Gn
         end
