@@ -26,9 +26,12 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
     dt = csdsetup.dt;                      # order of MAR. Hard-coded in SPM12 with this value. We will use the same for now.
     freq = csdsetup.freq;                  # frequencies at which the CSD is evaluated
     mar_order = csdsetup.mar_order;        # order of MAR
-    mar = mar_ml(data, mar_order);         # compute MAR from time series y and model order p
-    y_csd = mar2csd(mar, freq, dt^-1);     # compute cross spectral densities from MAR parameters at specific frequencies freqs, dt^-1 is sampling rate of data
-
+    if typeof(data) <: Real
+        mar = mar_ml(data, mar_order);         # compute MAR from time series y and model order p
+        y_csd = mar2csd(mar, freq, dt^-1);     # compute cross spectral densities from MAR parameters at specific frequencies freqs, dt^-1 is sampling rate of data
+    else
+        y_csd = data
+    end
     statevals = [v for v in values(initcond)]
     append!(statevals, zeros(length(unknowns(model)) - length(statevals)))
     f_model = generate_function(model; expression=Val{false})[1]
@@ -77,8 +80,8 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
         f,                                    # function that computes the cross-spectral density at fixed point 'initcond'
         y_csd,                                # empirical cross-spectral density
         1e-1,                                 # tolerance
-        [nr, np, ny, nq, nh],                 # number of parameters, number of data points, number of Qs, number of hyperparameters
-        [μθ_pr, hyperpriors.μλ_pr],           # parameter and hyperparameter prior mean
+        [nr, np, ny, nh],                 # number of parameters, number of data points, number of Qs, number of hyperparameters
+        [μθ_pr, μλ_pr],           # parameter and hyperparameter prior mean
         [inv(Σθ_pr), hyperpriors.Πλ_pr],      # parameter and hyperparameter prior precision matrices
         Q,                                    # components of data precision matrix
         modelparam
