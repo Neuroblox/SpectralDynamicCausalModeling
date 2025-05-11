@@ -10,7 +10,7 @@ using Graphs
 using ModelingToolkit
 using Statistics
 using MAT
-
+using SparseArrays
 
 include("utils/typedefinitions.jl")
 include("utils/helperfunctions.jl")
@@ -90,7 +90,7 @@ end
 
 # attribute initial conditions to states
 sts, idx_sts = get_dynamic_states(fullmodel)
-idx_u = get_idx_tagged_vars(fullmodel, "ext_input")                # get index of external input state
+idx_u = get_idx_tagged_vars(fullmodel, "ext_input")                   # get index of external input state
 idx_measurement, _ = get_eqidx_tagged_vars(fullmodel, "measurement")  # get index of equation of bold state
 initcond = OrderedDict(sts .=> 0.0)
 rnames = []
@@ -149,18 +149,19 @@ priors = (μθ_pr = modelparam,
 
 csdsetup = (mar_order = 8, freq = vec(vars["Hz"]), dt = vars["dt"]);
 nf = length(csdsetup.freq)
-Q = zeros(nf*nr^2, nf*nr^2, nr^2);
-for (i, q) in enumerate(eachslice(Q, dims=3))
+Q = [spzeros(nf*nr^2, nf*nr^2) for i = 1:nr^2];
+for (i, q) in enumerate(Q)
     q[diagind(q)[((i-1)*nf+1):(nf*i)]] .= 1.0
 end
 
-hyperpriors = (Πλ_pr = Matrix(exp(4)*I, nr^2, nr^2),   # prior metaparameter precision, needs to be a matrix
-               Q = Q
+hyperpriors = (  # prior metaparameter precision, needs to be a matrix
+               Q = Q,
               );
 
 (state, setup) = setup_spDCM(data, fullmodel, initcond, csdsetup, priors, hyperpriors, indices, modelparam, "LFP");
+using StatProfilerHTML
 
-for iter in 1:128
+@profilehtml for iter in 1:128
     state.iter = iter
     run_spDCM_iteration!(state, setup)
     print("iteration: ", iter, " - F:", state.F[end] - state.F[2], " - dF predicted:", state.dF[end], "\n")

@@ -75,6 +75,7 @@ function csd_approx(ω, derivatives, params, params_idx)
             Gn[:,j,i] = Gn[:,i,j]
         end
     end
+
     S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
 
     # predicted cross-spectral density
@@ -85,7 +86,6 @@ function csd_approx(ω, derivatives, params, params_idx)
 
     return G + Gn
 end
-
 
 function csd_approx_lfp(ω, derivatives, params, params_idx)
     # priors of spectral parameters
@@ -127,7 +127,7 @@ function csd_approx_lfp(ω, derivatives, params, params_idx)
     return G
 end
 
-@views function csd_mtf(freqs, p, derivatives, params, params_idx, modality)   # alongside the above realtes to spm_csd_fmri_mtf.m
+function csd_mtf!(y, freqs, p, derivatives, params, params_idx, modality)   # alongside the above realtes to spm_csd_fmri_mtf.m
     if modality == "fMRI"
         G = csd_approx(freqs, derivatives, params, params_idx)
 
@@ -137,14 +137,17 @@ end
         # But this does not correspond to any equation in the papers nor is it commented in the SPM12 code. NB: Friston conferms that likely it is
         # to make y well behaved.
         mar = csd2mar(G, freqs, dt, p-1)
-        y = mar2csd(mar, freqs)    
+        csd = mar2csd(mar, freqs)
     elseif modality == "LFP"
-        y = csd_approx_lfp(freqs, derivatives, params, params_idx)
+        csd = csd_approx_lfp(freqs, derivatives, params, params_idx)
     end
-    if real(eltype(y)) <: Dual
-        y_vals = Complex.((p->p.value).(real(y)), (p->p.value).(imag(y)))
-        y_part = (p->p.partials).(real(y)) + (p->p.partials).(imag(y))*im
-        y = map((x1, x2) -> Dual{tagtype(real(y)[1]), ComplexF64, length(x2)}(x1, Partials(Tuple(x2))), y_vals, y_part)
+    # convert complex of duals to dual of complex:
+    if real(eltype(csd)) <: Dual
+        csd_vals = Complex.((p->p.value).(real(csd)), (p->p.value).(imag(csd)))
+        csd_part = (p->p.partials).(real(csd)) + (p->p.partials).(imag(csd))*im
+        y[:,:,:] = map((x1, x2) -> Dual{tagtype(real(csd)[1]), ComplexF64, length(x2)}(x1, Partials(Tuple(x2))), csd_vals, csd_part)
+    else
+        y[:,:,:] = csd
     end
 
     return y
@@ -181,7 +184,7 @@ function transferfunction(x, ω, params)
             for k = 1:nk
                 # transfer functions (FFT of kernel)
                 Sk = (1im*2*pi*ω .- Λ[k]).^-1
-                S[:,i,j] .+= dgdv[i,k]*dvdu[k,j]*Sk
+                S[:, i, j] .+= dgdv[i, k]*dvdu[k, j]*Sk
             end
         end
     end
@@ -189,7 +192,7 @@ function transferfunction(x, ω, params)
     return S
 end
 
-function csd_fmri_mtf(x, ω, p, params)
+function csd_fmri_mtf!(y, x, ω, p, params)
     nω = length(ω)
     nr = size(params.A, 1)
 
@@ -228,11 +231,14 @@ function csd_fmri_mtf(x, ω, p, params)
     # this transformation and back-transformation is taken from SPM. This is likely to stabilize the results, mathematically there is no reason 
     # for doing this and this operation is not present in the spDCM papers.
     mar = csd2mar(G_final, ω, dt, p-1)
-    y = mar2csd(mar, ω)
-    if real(eltype(y)) <: Dual
-        y_vals = Complex.((p->p.value).(real(y)), (p->p.value).(imag(y)))
-        y_part = (p->p.partials).(real(y)) + (p->p.partials).(imag(y))*im
-        y = map((x1, x2) -> Dual{tagtype(real(y)[1]), ComplexF64, length(x2)}(x1, Partials(Tuple(x2))), y_vals, y_part)
+    csd = mar2csd(mar, ω)
+    # convert complex of duals to dual of complex:
+    if real(eltype(csd)) <: Dual
+        csd_vals = Complex.((p->p.value).(real(csd)), (p->p.value).(imag(csd)))
+        csd_part = (p->p.partials).(real(csd)) + (p->p.partials).(imag(csd))*im
+        y[:,:,:] = map((x1, x2) -> Dual{tagtype(real(csd)[1]), ComplexF64, length(x2)}(x1, Partials(Tuple(x2))), csd_vals, csd_part)
+    else
+        y[:,:,:] = csd
     end
     return y
 end

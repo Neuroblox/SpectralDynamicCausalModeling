@@ -26,7 +26,7 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
     dt = csdsetup.dt;                      # order of MAR. Hard-coded in SPM12 with this value. We will use the same for now.
     freq = csdsetup.freq;                  # frequencies at which the CSD is evaluated
     mar_order = csdsetup.mar_order;        # order of MAR
-    if typeof(data) <: Real
+    if eltype(data) <: Real
         mar = mar_ml(data, mar_order);         # compute MAR from time series y and model order p
         y_csd = mar2csd(mar, freq, dt^-1);     # compute cross spectral densities from MAR parameters at specific frequencies freqs, dt^-1 is sampling rate of data
     else
@@ -46,19 +46,24 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
     ny = length(y_csd)     # total number of response variables
 
     ### complete hyperprior in case some fields are missing ###
-    if haskey(hyperpriors, :μλ_pr)
-        μλ_pr = hyperpriors.μλ_pr;
-    else
-        μλ_pr = ones(nr^2) .* (-log(var(y_csd[:])) + 4);             # compute prior means of λ which is also the prefactor of the matrix decomposition elements Q
-    end
     if haskey(hyperpriors, :Q)
         Q = hyperpriors.Q;
     else
-        Q = csd_Q(y_csd);             # compute functional connectivity prior Q. See Friston etal. 2007 Appendix A
+        Q = [csd_Q(y_csd)];             # compute functional connectivity prior Q. See Friston etal. 2007 Appendix A
+    end
+    nh = length(Q)                   # number of precision components (this is the same as above, but may differ)
+    if haskey(hyperpriors, :μλ_pr)
+        μλ_pr = hyperpriors.μλ_pr;
+    else
+        μλ_pr = ones(nh) .* (-log(var(y_csd[:])) + 4);             # compute prior means of λ which is also the prefactor of the matrix decomposition elements Q
+    end
+    if haskey(hyperpriors, :Πλ_pr)
+        Πλ_pr = hyperpriors.Πλ_pr;
+    else
+        Πλ_pr = Matrix(exp(4)*I, nh, nh)             # compute prior covariance of λ
     end
 
-    nh = size(Q, 3)                   # number of precision components (this is the same as above, but may differ)
-    f = params -> csd_mtf(freq, mar_order, derivatives, params, indices, modality)
+    f! = (y, params) -> csd_mtf!(y, freq, mar_order, derivatives, params, indices, modality)
 
     # variational laplace state variables
     vlstate = VLMTKState(
@@ -77,13 +82,13 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
 
     # variational laplace setup
     vlsetup = VLMTKSetup(
-        f,                                    # function that computes the cross-spectral density at fixed point 'initcond'
-        y_csd,                                # empirical cross-spectral density
-        1e-1,                                 # tolerance
-        [nr, np, ny, nh],                 # number of parameters, number of data points, number of Qs, number of hyperparameters
-        [μθ_pr, μλ_pr],           # parameter and hyperparameter prior mean
-        [inv(Σθ_pr), hyperpriors.Πλ_pr],      # parameter and hyperparameter prior precision matrices
-        Q,                                    # components of data precision matrix
+        f!,                               # function that computes the cross-spectral density at fixed point 'initcond'
+        y_csd,                           # empirical cross-spectral density
+        1e-1,                            # tolerance
+        [nr, np, ny, nh],                # number of parameters, number of data points, number of Qs, number of hyperparameters
+        [μθ_pr, μλ_pr],                  # parameter and hyperparameter prior mean
+        [inv(Σθ_pr), Πλ_pr],             # parameter and hyperparameter prior precision matrices
+        Q,                               # components of data precision matrix
         modelparam
     )
     return (vlstate, vlsetup)
@@ -119,24 +124,24 @@ function setup_spDCM(data, initcond, csdsetup, priors, hyperpriors)
     y_csd = mar2csd(mar, freq, dt^-1);     # compute cross spectral densities from MAR parameters at specific frequencies freqs, dt^-1 is sampling rate of data
 
     nr = size(y_csd, 2)           # get number of regions from data
-    np = size(V, 2)               # number of parameters
     ny = length(y_csd)            # total number of response variables (dimensions x number of frequencies)
     ### complete hyperprior in case some fields are missing ###
     if haskey(hyperpriors, :Q)
         Q = hyperpriors.Q;
     else
-        Q = csd_Q(y_csd);             # compute functional connectivity prior Q. See Friston etal. 2007 Appendix A
+        Q = [csd_Q(y_csd)];             # compute functional connectivity prior Q. See Friston etal. 2007 Appendix A
     end
-    nh = size(Q, 3)                   # number of precision components
+    nh = length(Q)                    # number of precision components
     if haskey(hyperpriors, :μλ_pr)
         μλ_pr = hyperpriors.μλ_pr;
     else
         μλ_pr = ones(nr^2) .* (-log(var(y_csd[:])) + 4);    # compute prior means of λ which is also the prefactor of the matrix decomposition elements Q
     end
 
-    f = params -> csd_fmri_mtf(initcond, freq, mar_order, params)
+    f! = (y, params) -> csd_fmri_mtf!(y, initcond, freq, mar_order, params)
 
     Σθ_pr, V = removezerovardims(priors.Σθ_pr)
+    np = size(V, 2)               # number of parameters
 
     # variational laplace state variables
     vlstate = VLState(
@@ -155,7 +160,7 @@ function setup_spDCM(data, initcond, csdsetup, priors, hyperpriors)
 
     # variational laplace setup
     vlsetup = VLSetup(
-        f,                                    # function that computes the cross-spectral density at fixed point 'initcond'
+        f!,                                    # function that computes the cross-spectral density at fixed point 'initcond'
         y_csd,                                # empirical cross-spectral density
         1e-1,                                 # tolerance
         [nr, np, ny, nh],                     # number of parameters, number of data points, number of Qs, number of hyperparameters

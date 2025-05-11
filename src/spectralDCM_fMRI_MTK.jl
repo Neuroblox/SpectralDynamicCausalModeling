@@ -8,6 +8,7 @@ using ComponentArrays
 using MetaGraphs
 using Graphs
 using ModelingToolkit
+using SparseArrays
 using MAT
 
 include("utils/typedefinitions.jl")

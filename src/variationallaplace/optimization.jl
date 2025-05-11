@@ -1,12 +1,13 @@
-function diff(U, dx, f, param)
+function diff!(U, dx, f!, y0, param)
     nJ = size(U, 2)
-    y0 = f(param)
+    f!(y0, param)
     J = zeros(ComplexF64, nJ, size(y0, 1), size(y0, 2), size(y0, 3))
+    y1 = similar(y0)
     for i = 1:nJ
-        y1 = f(param .+ U[:, i]*dx)
+        f!(y1, param .+ U[:, i]*dx)
         J[i,:,:,:] = (y1 .- y0)/dx
     end
-    return J, y0
+    return J
 end
 
 function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
@@ -19,7 +20,8 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
     (Πθ_pr, Πλ_pr, V) = setup.systemmatrices
     Q = setup.Q
 
-    dfdθ, f_μθ = diff(V, dx, f, μθ_po);
+    f_μθ = similar(y)
+    dfdθ = diff!(V, dx, f, f_μθ, μθ_po);
     dfdθ = transpose(reshape(dfdθ, np, ny))
 
     norm_dfdθ = opnorm(dfdθ, Inf);
@@ -35,7 +37,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
 
             μθ_po = μθ_pr + V * ϵ_θ
 
-            dfdθ, f_μθ = diff(V, dx, f_prep, μθ_po);
+            dfdθ = diff!(V, dx, f_prep, f_μθ, μθ_po);
             dfdθ = transpose(reshape(dfdθ, np, ny))
 
             # check for stability
@@ -53,16 +55,16 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
     J = - dfdθ   # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
 
     ## M-step: Fisher scoring scheme to find h = max{F(p,h)} // comment from MATLAB code
-    P = zeros(eltype(J), size(Q))
-    PΣ = zeros(eltype(J), size(Q))
-    JPJ = zeros(real(eltype(J)), size(J, 2), size(J, 2), size(Q, 3))
-    dFdλ = zeros(real(eltype(J)), nh)
-    dFdλλ = zeros(real(eltype(J)), nh, nh)
+    P = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
+    PΣ = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
+    JPJ = [spzeros(real(eltype(J)), size(J)) for i = 1:nh]
+    dFdλ = spzeros(eltype(J), nh)
+    dFdλλ = spzeros(real(eltype(J)), nh, nh)
     local iΣ, Σλ_po, Σθ_po, ϵ_λ
     for m = 1:8   # 8 seems arbitrary. Numbers of iterations taken from SPM code.
         iΣ = zeros(eltype(J), ny, ny)
         for i = 1:nh
-            iΣ .+= Q[:, :, i] * exp(λ[i])
+            iΣ .+= Q[i] * exp(λ[i])
         end
 
         Pp = real(J' * iΣ * J)    # in MATLAB code 'real()' is applied to the resulting matrix product, why is this okay?
@@ -70,14 +72,14 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
 
         if nh > 1
             for i = 1:nh
-                P[:,:,i] = Q[:,:,i]*exp(λ[i])
-                PΣ[:,:,i] = iΣ \ P[:,:,i]
-                JPJ[:,:,i] = real(J'*P[:,:,i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
+                P[i] = Q[i]*exp(λ[i])
+                PΣ[i] = iΣ \ P[i]
+                JPJ[i] = real(J'*P[i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[:,:,i]) - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
+                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))*1/2
+                    dFdλλ[i, j] = -real(sum(PΣ[i] ⋅ PΣ[j]))*1/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
@@ -174,14 +176,15 @@ end
 function run_spDCM_iteration!(state::VLState, setup::VLSetup)
     (;μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ) = state
 
-    f = setup.model_at_x0
+    f! = setup.model_at_x0
     y = setup.y_csd              # cross-spectral density
     (_, _, ny, nh) = setup.systemnums
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr, V) = setup.systemmatrices
     Q = setup.Q
 
-    dfdp = ForwardDiff.jacobian(f, μθ_po) * V
+    f_μθ = similar(y)
+    dfdp = jacobian(f!, f_μθ, μθ_po) * V
 
     norm_dfdp = opnorm(dfdp, Inf);
     revert = isnan(norm_dfdp) || norm_dfdp > exp(32);
@@ -196,7 +199,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
 
             μθ_po = μθ_pr + V * ϵ_θ
 
-            dfdp = ForwardDiff.jacobian(f, μθ_po) * V
+            dfdp = jacobian(f, f_μθ, μθ_po) * V
 
             # check for stability
             norm_dfdp = opnorm(dfdp, Inf);
@@ -209,8 +212,8 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
         end
     end
 
-    ϵ = reshape(y - f(μθ_po), ny)                   # error
-    J = - dfdp   # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
+    ϵ = reshape(y - f_μθ, ny)       # error
+    J = - dfdp                          # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
 
     ## M-step: Fisher scoring scheme to find h = max{F(p,h)} // comment from MATLAB code
     P = zeros(eltype(J), size(Q))
@@ -222,7 +225,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
     for m = 1:8   # 8 seems arbitrary. Numbers of iterations taken from SPM code.
         iΣ = zeros(eltype(J), ny, ny)
         for i = 1:nh
-            iΣ .+= Q[:, :, i] * exp(λ[i])
+            iΣ .+= Q[i] * exp(λ[i])
         end
 
         Pp = real(J' * iΣ * J)    # in MATLAB code 'real()' is applied to the resulting matrix product, why is this okay?
@@ -230,14 +233,14 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
 
         if nh > 1
             for i = 1:nh
-                P[:,:,i] = Q[:,:,i]*exp(λ[i])
-                PΣ[:,:,i] = iΣ \ P[:,:,i]
-                JPJ[:,:,i] = real(J'*P[:,:,i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
+                P[i] = Q[i]*exp(λ[i])
+                PΣ[i] = iΣ \ P[i]
+                JPJ[i] = real(J'*P[i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[:,:,i]) - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
+                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))*1/2
+                    dFdλλ[i, j] = -real(tr(PΣ[i] * PΣ[j]))*1/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
@@ -334,14 +337,15 @@ end
 function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
     (;μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ) = state
 
-    f = setup.model_at_x0
+    f! = setup.model_at_x0
     y = setup.y_csd              # cross-spectral density
     (nr, np, ny, nh) = setup.systemnums
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr) = setup.systemmatrices
     Q = setup.Q
 
-    dfdp = jacobian(f, μθ_po)
+    f_μθ = similar(y)
+    dfdp = jacobian(f!, f_μθ, μθ_po)
 
     norm_dfdp = opnorm(dfdp, Inf);
     revert = isnan(norm_dfdp) || norm_dfdp > exp(32);
@@ -356,7 +360,7 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
 
             μθ_po = μθ_pr + ϵ_θ
 
-            dfdp = ForwardDiff.jacobian(f, μθ_po)
+            dfdp = jacobian(f!, f_μθ, μθ_po)
 
             # check for stability
             norm_dfdp = opnorm(dfdp, Inf);
@@ -369,35 +373,34 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
         end
     end
 
-    ϵ = reshape(y - f(μθ_po), ny)                   # error
+    ϵ = reshape(y - f_μθ, ny)                   # error
     J = - dfdp   # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
 
     ## M-step: Fisher scoring scheme to find h = max{F(p,h)} // comment from MATLAB code
-    P = zeros(eltype(J), size(Q))
-    PΣ = zeros(eltype(J), size(Q))
-    JPJ = zeros(real(eltype(J)), size(J, 2), size(J, 2), size(Q, 3))
-    dFdλ = zeros(real(eltype(J)), nh)
-    dFdλλ = zeros(real(eltype(J)), nh, nh)
+    P = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
+    PΣ = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
+    JPJ = [spzeros(real(eltype(J)), size(J)) for i = 1:nh]
+    dFdλ = spzeros(eltype(J), nh)
+    dFdλλ = spzeros(real(eltype(J)), nh, nh)
     local iΣ, Σλ_po, Σθ_po, ϵ_λ
     for m = 1:8   # 8 seems arbitrary. Numbers of iterations taken from SPM code.
-        iΣ = zeros(eltype(J), ny, ny)
+        iΣ = spzeros(eltype(J), ny, ny)
         for i = 1:nh
-            iΣ .+= Q[:, :, i] * exp(λ[i])
+            iΣ .+= Q[i] * exp(λ[i])
         end
 
-        Pp = real(J' * iΣ * J)    # in MATLAB code 'real()' is applied to the resulting matrix product, why is this okay?
+        Pp = real(J' * iΣ * J)    # in the SPM code 'real()' is applied here and there. Essentially the complex dimension seems to be ignored at some point with no rational given. Is that okay?
         Σθ_po = inv(Pp + Πθ_pr)
-
         if nh > 1
             for i = 1:nh
-                P[:,:,i] = Q[:,:,i]*exp(λ[i])
-                PΣ[:,:,i] = iΣ \ P[:,:,i]
-                JPJ[:,:,i] = real(J'*P[:,:,i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
+                P[i] = Q[i]*exp(λ[i])
+                PΣ[i] = iΣ \ P[i]
+                JPJ[i] = real(J'*P[i]*J)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[:,:,i]) - real(dot(ϵ, P[:,:,i], ϵ)) - tr(Σθ_po * JPJ[:,:,i]))/2
+                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(tr(PΣ[:,:,i] * PΣ[:,:,j]))/2
+                    dFdλλ[i, j] = -real(sum(PΣ[i]' ⋅ PΣ[j]))/2   #tr(PΣ[:,:,i] * PΣ[:,:,j])
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
@@ -416,7 +419,7 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
         ϵ_λ = λ - μλ_pr
         dFdλ = dFdλ - Πλ_pr*ϵ_λ
         dFdλλ = dFdλλ - Πλ_pr
-        Σλ_po = inv(-dFdλλ)
+        Σλ_po = inv(-real(dFdλλ))
 
         # E-Step: update
         dλ = real(integration_step(dFdλλ, dFdλ, 4))
