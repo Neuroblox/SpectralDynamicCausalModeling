@@ -17,7 +17,7 @@ function integration_step(J, f, v, solenoid=false)
     # Could also be done with `exponential!` but isn't numerically stable.
     # Thus, just use `exp`.
     n = length(f)
-    t = exp(v - spm_logdet(J)/n)
+    t = exp(v - spm_logdet(real(J))/n)
 
     if t > exp(16)
         dx = - J \ f
@@ -66,21 +66,6 @@ function vecparam(param::OrderedDict)
     end
     return flatparam
 end
-
-# function unvecparam(vals, param::OrderedDict)
-#     iter = 1
-#     paramnewvals = copy(param)
-#     for (k, v) in param
-#         if (typeof(v) <: Array)
-#             paramnewvals[k] = vals[iter:iter+length(v)-1]
-#             iter += length(v)
-#         else
-#             paramnewvals[k] = vals[iter]
-#             iter += 1
-#         end
-#     end
-#     return paramnewvals
-# end
 
 """
     function spm_logdet(M)

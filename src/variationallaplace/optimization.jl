@@ -343,7 +343,12 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr) = setup.systemmatrices
     Q = setup.Q
+    Main.foo[] = Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state
+    error()
+    _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state)
+end
 
+function _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state)
     f_μθ = similar(y)
     dfdp = jacobian(f!, f_μθ, μθ_po)
 

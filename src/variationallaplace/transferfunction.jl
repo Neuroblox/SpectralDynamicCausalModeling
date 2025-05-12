@@ -1,13 +1,7 @@
 tagtype(::Dual{T,V,N}) where {T,V,N} = T
 
 
-function transferfunction(ω, derivatives, params, indices)
-    ∂f = derivatives(params[indices[:dspars]])
-    # dissect into Jacobian w.r.t. dynamic variables as well as partial derivatives wrt input variables and gradient of measurement function
-    ∂f∂x = ∂f[indices[:sts], indices[:sts]]
-    ∂f∂u = ∂f[indices[:sts], indices[:u]]
-    ∂g∂x = ∂f[indices[:m], indices[:sts]]
-
+function _transferfunction(ω, ∂f∂x, ∂f∂u, ∂g∂x)
     F = eigen(∂f∂x)
     Λ = F.values
     V = F.vectors
@@ -29,7 +23,17 @@ function transferfunction(ω, derivatives, params, indices)
             end
         end
     end
+    return S
+end
 
+function transferfunction(ω, derivatives, params, indices)
+    ∂f = derivatives(params[indices[:dspars]])
+    # dissect into Jacobian w.r.t. dynamic variables as well as partial derivatives wrt input variables and gradient of measurement function
+    ∂f∂x = ∂f[indices[:sts], indices[:sts]]
+    ∂f∂u = ∂f[indices[:sts], indices[:u]]
+    ∂g∂x = ∂f[indices[:m], indices[:sts]]
+ 
+    S = _transferfunction(ω, ∂f∂x, ∂f∂u, ∂g∂x)
     return S
 end
 
@@ -108,6 +112,9 @@ function csd_approx_lfp(ω, derivatives, params, params_idx)
     for i = 1:nd
         Gs[:, i] .+= exp(γ[1, i] - 2) .* ω.^(-exp(γ[2, 1]))  # this is really oddly implemented in SPM, the exponent parameter is kept fixed, leaving parameters that essentially don't matter
     end
+
+#     Main.foo[] = ω, derivatives, params, params_idx
+# error()
 
     S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
 
