@@ -79,7 +79,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
             for i = 1:nh
                 dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(sum(PΣ[i] ⋅ PΣ[j]))*1/2
+                    dFdλλ[i, j] = -real(sum(PΣ[i]' ⋅ PΣ[j]))*1/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
@@ -240,7 +240,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
             for i = 1:nh
                 dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(tr(PΣ[i] * PΣ[j]))*1/2
+                    dFdλλ[i, j] = -real(sum(PΣ[i]' ⋅ PΣ[j]))*1/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
