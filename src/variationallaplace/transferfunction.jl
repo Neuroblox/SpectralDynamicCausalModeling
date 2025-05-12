@@ -18,7 +18,7 @@ function _transferfunction(ω, ∂f∂x, ∂f∂u, ∂g∂x)
         for i = 1:ng
             for k = 1:nk
                 # transfer functions (FFT of kernel)
-                Sk = (1im*2*pi*ω .- Λ[k]).^-1
+                Sk = ((im*2*pi) .* ω .- Λ[k]).^-1
                 S[:,i,j] .+= ∂g∂v[i,k]*∂v∂u[k,j]*Sk
             end
         end
@@ -223,7 +223,7 @@ function csd_fmri_mtf!(y, x, ω, p, params)
     for i = 1:nr
         for j = i:nr
             Gn[:, i, j] .+= exp(params.lnβ[1])*G
-            Gn[:, j, i] = Gn[:, i, j]
+            Gn[:, j, i] .= Gn[:, i, j]
         end
     end
     S = transferfunction(x, ω, params)
