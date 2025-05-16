@@ -472,6 +472,9 @@ function addnontunableparams(paramlist::Vector{T}, sys) where T
     return completeparamlist
 end
 
+getnontunableparams(sys) = [Symbolics.getdefaultval(p) for p ∈ parameters(sys) if !istunable(p)]
+
+
 function changetune(model, parlist)
     parstochange = keys(parlist)
     p_new = map(parameters(model)) do p

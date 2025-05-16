@@ -110,7 +110,7 @@ np = sum(tunable_parameters(fullmodel); init=0) do par
 end
 # indices2 = Dict(:dspars => collect(1:np))
 indices2 = (dspars = collect(1:np), u = idx_u, m = idx_measurement, sts = idx_sts)
-indices = Dict()
+indices = Dict{Symbol, Vector{Int}}()
 # Noise parameter mean
 modelparam[:lnα] = zeros(Float64, 2, nr);         # intrinsic fluctuations, ln(α) as in equation 2 of Friston et al. 2014 
 n = length(modelparam[:lnα]);

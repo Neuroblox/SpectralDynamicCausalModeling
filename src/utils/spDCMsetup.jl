@@ -35,8 +35,9 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
     statevals = [v for v in values(initcond)]
     append!(statevals, zeros(length(unknowns(model)) - length(statevals)))
     f_model = generate_function(model; expression=Val{false})[1]
-    f_at(params, t) = states -> f_model(states, MTKParameters(model, params)..., t)
-    derivatives = par -> jacobian(f_at(addnontunableparams(par, model), t), statevals)
+    ntparams = getnontunableparams(model)
+    f_at(params, t) = states -> f_model(states, params, ntparams, t)
+    derivatives = par -> jacobian(f_at(par, t), statevals)
 
     μθ_pr = vecparam(priors.μθ_pr)        # note: μθ_po is posterior and μθ_pr is prior
     Σθ_pr = priors.Σθ_pr
@@ -62,7 +63,6 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
     else
         Πλ_pr = Matrix(exp(4)*I, nh, nh)             # compute prior covariance of λ
     end
-
     f! = (y, params) -> csd_mtf!(y, freq, mar_order, derivatives, params, indices, indices2, modality)
 
     # variational laplace state variables

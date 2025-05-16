@@ -1,8 +1,7 @@
 tagtype(::Dual{T,V,N}) where {T,V,N} = T
 
 
-function _transferfunction(ω, ∂f∂x, ∂f∂u, ∂g∂x)
-    F = eigen(∂f∂x)
+function _transferfunction(ω, F, ∂f∂x, ∂f∂u, ∂g∂x)
     Λ = F.values
     V = F.vectors
 
@@ -32,9 +31,8 @@ function transferfunction(ω, derivatives, params, indices)
     ∂f∂x = ∂f[indices[:sts], indices[:sts]]
     ∂f∂u = ∂f[indices[:sts], indices[:u]]
     ∂g∂x = ∂f[indices[:m], indices[:sts]]
-Main.foo[] = ω, ∂f∂x, ∂f∂u, ∂g∂x
-    error()
-    S = _transferfunction(ω, ∂f∂x, ∂f∂u, ∂g∂x)
+    F = eigen(∂f∂x)
+    S = _transferfunction(ω, F, ∂f∂x, ∂f∂u, ∂g∂x)
     return S
 end
 
@@ -148,9 +146,11 @@ function csd_mtf!(y, freqs, p, derivatives, params, params_idx, model_idx, modal
     end
     # convert complex of duals to dual of complex:
     if real(eltype(csd)) <: Dual
-        csd_vals = Complex.((p->p.value).(real(csd)), (p->p.value).(imag(csd)))
-        csd_part = (p->p.partials).(real(csd)) + (p->p.partials).(imag(csd))*im
-        y[:,:,:] = map((x1, x2) -> Dual{tagtype(real(csd)[1]), ComplexF64, length(x2)}(x1, Partials(Tuple(x2))), csd_vals, csd_part)
+        y[:,:,:] = map(csd) do csdi
+            csdi_val  = Complex(real(csdi).value + imag(csdi).value)
+            csdi_part = Partials(Complex.(real(csdi).partials.values, imag(csdi).partials.values))
+            Dual{tagtype(real(csdi))}(csdi_val, csdi_part)
+        end
     else
         y[:,:,:] = csd
     end
