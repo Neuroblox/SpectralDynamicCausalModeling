@@ -16,11 +16,13 @@ F_mtk =  Vector{Float64}()
 list = collect(2:10)
 # append!(list,10)
 for i = list
-    tmp = matread("speedandaccuracy/PM_MTK" * string(i) * ".mat");
+    tmp = matread("speedcomp" * string(i) * "regions.mat");
+    tmpmat = matread("speed-comparison/fastspeed/matlab_" * string(i) * "regions.mat");
     # append!(t_mat, tmp["t_mat"]/tmp["iter_spm"])
     # append!(t_julad, tmp["t_jad"]/tmp["iter_ad"])
     # append!(t_julspm, tmp["t_jspm"]/tmp["iter_spm"])
-    append!(t_mat, tmp["t_mat"])
+    # append!(t_mat, tmp["t_mat"])
+    append!(t_mat, tmpmat["matcomptime"])
     append!(t_julad, tmp["t_jad"])
     append!(t_julspm, tmp["t_jspm"])
     append!(t_julmtk, tmp["t_mtk"])
@@ -36,14 +38,46 @@ end
 # plot!(list, (t_mat./t_julspm.-1), linewidth=3, label="Julia SPM12")
 # scatter!(list, (t_mat./t_julad.-1), markersize=6, color="blue", label=nothing)
 # scatter!(list, (t_mat./t_julspm.-1), markersize=6, color="red", label=nothing)
-plot(list, t_julspm./60, legendfontsize=12, xtickfontsize=14, xguidefontsize=14, ytickfontsize=14, yguidefontsize=14, legend=:topleft, xlabel="Number of Regions",ylabel="Computation Time [min]", linewidth=3, label="Julia SPM12", framestyle=:box)
+plot(list, t_julspm./60, legendfontsize=12, xtickfontsize=14, xguidefontsize=14, ytickfontsize=14, yguidefontsize=14, legend=:topleft, xlabel="Number of Regions",ylabel="Computation Time [min]", linewidth=3, label="Julia SPM25", framestyle=:box)
 plot!(list, t_julad./60, linewidth=3, label="Julia AD")
 plot!(list, t_julmtk./60, linewidth=3, label="Julia MTK + AD")
-plot!(list, t_mat./60, linewidth=3, color="black", label="Matlab SPM12")
+plot!(list, t_mat./60, linewidth=3, color="black", label="Matlab SPM25")
 scatter!(list, t_julad, markersize=6, color="blue", label=nothing)
 scatter!(list, t_julspm, markersize=6, color="red", label=nothing)
-title!("speed comparison between Julia and Matlab")
-savefig("speedandaccuracy/plots/speedcomp10regions_MTK.png")
+title!("speed comparison between Julia and Matlab \n no precision matrix decomposition")
+savefig("speed-comparison/plots/speedcomp10regions_spm25_fast.png")
+
+############## LFP/CMC Speed Comparison ####################
+
+t_mat = Vector{Float64}()
+t_julmtk = Vector{Float64}()
+iter_mtk = Vector{Float64}()
+F_mat = Vector{Float64}()
+F_mtk =  Vector{Float64}()
+list = collect(2:6)
+for i = list
+    tmp = matread("speed-comparison/speedcomp_lfp_improved_sparse_" * string(i) * "regions.mat");
+    tmpmat = matread("speed-comparison/cmc_" * string(i) * "regions.mat");
+    # append!(t_mat, tmp["t_mat"]/tmp["iter_spm"])
+    # append!(t_julad, tmp["t_jad"]/tmp["iter_ad"])
+    # append!(t_julspm, tmp["t_jspm"]/tmp["iter_spm"])
+    # append!(t_mat, tmp["t_mat"])
+    append!(t_mat, tmpmat["matcomptime"])
+    append!(t_julmtk, tmp["t_mtk"])
+    append!(iter_mtk, tmp["iter_mtk"])
+    append!(F_mat, tmp["F_mat"])
+    append!(F_mtk, tmp["F_mtk"])
+end
+# plot(list, (t_mat./t_julad.-1), legendfontsize=12, xtickfontsize=14, xguidefontsize=14, ytickfontsize=14, yguidefontsize=14, legend=:topleft, xlabel="number of regions",ylabel="speed increase", linewidth=3, label="Julia AD")
+# plot!(list, (t_mat./t_julspm.-1), linewidth=3, label="Julia SPM12")
+# scatter!(list, (t_mat./t_julad.-1), markersize=6, color="blue", label=nothing)
+# scatter!(list, (t_mat./t_julspm.-1), markersize=6, color="red", label=nothing)
+plot(list, t_julmtk./60, legendfontsize=12, xtickfontsize=14, xguidefontsize=14, ytickfontsize=14, yguidefontsize=14, legend=:topleft, xlabel="Number of Regions",ylabel="Computation Time [min]", linewidth=3, label="Julia MTK + AD", framestyle=:box)
+plot!(list, t_mat./60, linewidth=3, color="black", label="Matlab SPM25")
+title!("speed comparison CMC, with sparse arrays, \n trace-replacement and no setindex")
+savefig("speed-comparison/plots/speedcomp_cmc_5regions_spm25_improved_sparse.png")
+
+
 
 
 ### plot ADVI results ###
