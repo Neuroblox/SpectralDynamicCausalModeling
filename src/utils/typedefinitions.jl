@@ -51,12 +51,26 @@ mutable struct VLMTKState
     dF::Vector{Float64}          # predicted free energy changes (store at each iteration)
     λ::Vector{Float64}           # hyperparameter
     ϵ_θ::Vector{Float64}         # prediction error of parameters θ
-    reset_state::Vector{Any}     # store state to reset to [ϵ_θ and λ] when the free energy gets worse rather than better
+    reset_state::Vector{Vector{Float64}}     # store state to reset to [ϵ_θ and λ] when the free energy gets worse rather than better
     μθ_po::Vector{Float64}       # posterior expectation value of parameters 
     Σθ_po::Matrix{Float64}       # posterior covariance matrix of parameters
     dFdθ::Vector{Float64}        # free energy gradient w.r.t. parameters
     dFdθθ::Matrix{Float64}       # free energy Hessian w.r.t. parameters
 end
+
+Base.copy(S::VLMTKState) = VLMTKState(
+    copy(S.iter),
+    copy(S.v),
+    copy(S.F),
+    copy(S.dF),
+    copy(S.λ),
+    copy(S.ϵ_θ),
+    copy(S.reset_state),
+    copy(S.μθ_po),
+    copy(S.Σθ_po),
+    copy(S.dFdθ),
+    copy(S.dFdθθ)
+)
 
 struct VLMTKSetup{Model, T1 <: Array{ComplexF64}, T2 <: AbstractArray}
     model_at_x0::Model                        # model evaluated at initial conditions
