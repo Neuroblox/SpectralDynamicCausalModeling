@@ -1,3 +1,9 @@
+name = "SpectralDynamicCausalModeling"
+uuid = "42dad5f7-23d0-46be-9e4f-61e793662686"
+author = ["David Hofmann david.hofmann@mytum.de"]
+repo = "https://github.com/Neuroblox/SpectralDynamicCausalModeling.git"
+version = "0.1.0-DEV"
+
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
@@ -32,6 +38,11 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 StatsPlots = "f3b207a7-027a-5e70-b257-86293d7955fd"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 ToeplitzMatrices = "c751599d-da0a-543b-9d20-d0a503d91d24"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[compat]
+ModelingToolkit = "9.55.0 - 9.60"
+UUIDs = "1.11.0"
 
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
