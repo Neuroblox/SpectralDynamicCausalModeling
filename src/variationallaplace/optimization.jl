@@ -343,8 +343,8 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr) = setup.systemmatrices
     Q = setup.Q
-    Main.foo[] = Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state
-    error()
+    # Main.foo[] = Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state
+    
     _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state)
 end
 
@@ -380,20 +380,21 @@ function _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny
 
     ϵ = reshape(y - f_μθ, ny)                   # error
     J = - dfdp   # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
-
     ## M-step: Fisher scoring scheme to find h = max{F(p,h)} // comment from MATLAB code
-    P = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
-    PΣ = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
-    JPJ = [spzeros(real(eltype(J)), size(J)) for i = 1:nh]
-    dFdλ = spzeros(eltype(J), nh)
-    dFdλλ = spzeros(real(eltype(J)), nh, nh)
+    eltypeJ = ComplexF64
+    P = [spzeros(eltypeJ, size(Q[i])) for i = 1:nh]
+    PΣ = [spzeros(eltypeJ, size(Q[i])) for i = 1:nh]
+    JPJ = [spzeros(real(eltypeJ), size(J)) for i = 1:nh]
+    dFdλ = spzeros(eltypeJ, nh)
+    dFdλλ = spzeros(real(eltypeJ), nh, nh)
     local iΣ, Σλ_po, Σθ_po, ϵ_λ
     for m = 1:8   # 8 seems arbitrary. Numbers of iterations taken from SPM code.
         iΣ = spzeros(eltype(J), ny, ny)
-        for i = 1:nh
-            iΣ .+= Q[i] * exp(λ[i])
-        end
-
+        iΣ = sum(i ->Q[i]*exp(λ[i]), 1:nh)
+        # for i = 1:nh
+        #     iΣ .+= Q[i] * exp(λ[i])
+        # end
+        # iΣfac = qr(iΣ)
         Pp = real(J' * iΣ * J)    # in the SPM code 'real()' is applied here and there. Essentially the complex dimension seems to be ignored at some point with no rational given. Is that okay?
         Σθ_po = inv(Pp + Πθ_pr)
         if nh > 1
@@ -403,9 +404,9 @@ function _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny
                 JPJ[i] = real(J'*P[i]*J)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
+                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - (Σθ_po' ⋅ JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(sum(PΣ[i]' ⋅ PΣ[j]))/2   #tr(PΣ[:,:,i] * PΣ[:,:,j])
+                    dFdλλ[i, j] = -real(PΣ[i]' ⋅ PΣ[j])/2   #tr(PΣ[:,:,i] * PΣ[:,:,j])
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
