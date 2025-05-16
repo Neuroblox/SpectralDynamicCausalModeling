@@ -343,12 +343,7 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
     (μθ_pr, μλ_pr) = setup.systemvecs
     (Πθ_pr, Πλ_pr) = setup.systemmatrices
     Q = setup.Q
-    # Main.foo[] = Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state
-    
-    _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state)
-end
 
-function _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny, nh, y, f!, μθ_po, λ, v, ϵ_θ, dFdθ, dFdθθ, state)
     f_μθ = similar(y)
     dfdp = jacobian(f!, f_μθ, μθ_po)
 
@@ -400,7 +395,7 @@ function _run_spDCM_iteration!(Q, Πθ_pr, Πλ_pr, μθ_pr, μλ_pr, nr, np, ny
         if nh > 1
             for i = 1:nh
                 P[i] = Q[i]*exp(λ[i])
-                PΣ[i] = iΣ \ P[i]
+                PΣ[i] = iΣ \ P[i]              # why is PΣ still type stable even if iΣ is of type Any? Maybe still slowing down since it needs to infer type.
                 JPJ[i] = real(J'*P[i]*J)
             end
             for i = 1:nh

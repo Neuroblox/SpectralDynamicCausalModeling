@@ -13,12 +13,12 @@ function _transferfunction(ω, ∂f∂x, ∂f∂u, ∂g∂x)
     ng = size(∂g∂x, 1)         # number of outputs
     nu = size(∂v∂u, 2)         # number of inputs
     nk = size(V, 2)            # number of modes
-    S = zeros(Complex{real(eltype(∂v∂u))}, nω, ng, nu)
+    S = zeros(Complex{real(eltype(∂g∂x))}, nω, ng, nu)
     for j = 1:nu
         for i = 1:ng
             for k = 1:nk
                 # transfer functions (FFT of kernel)
-                Sk = ((im*2*pi) .* ω .- Λ[k]).^-1
+                Sk = ((2im*pi) .* ω .- Λ[k]).^-1
                 S[:,i,j] .+= ∂g∂v[i,k]*∂v∂u[k,j]*Sk
             end
         end
@@ -32,7 +32,8 @@ function transferfunction(ω, derivatives, params, indices)
     ∂f∂x = ∂f[indices[:sts], indices[:sts]]
     ∂f∂u = ∂f[indices[:sts], indices[:u]]
     ∂g∂x = ∂f[indices[:m], indices[:sts]]
- 
+Main.foo[] = ω, ∂f∂x, ∂f∂u, ∂g∂x
+    error()
     S = _transferfunction(ω, ∂f∂x, ∂f∂u, ∂g∂x)
     return S
 end
@@ -46,7 +47,7 @@ end
     Gn in the code corresponds to Ge in the paper, i.e. the observation noise. In the code global and local components are defined, no such distinction
     is discussed in the paper. In fact the parameter γ, corresponding to local component is not present in the paper.
 """
-function csd_approx(ω, derivatives, params, params_idx)
+function csd_approx(ω, derivatives, params, params_idx, model_idx)
     # priors of spectral parameters
     # ln(α) and ln(β), region specific fluctuations: ln(γ)
     nω = length(ω)
@@ -80,7 +81,7 @@ function csd_approx(ω, derivatives, params, params_idx)
         end
     end
 
-    S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
+    S = transferfunction(ω, derivatives, params, model_idx)   # This is K(ω) in the equations of the spectral DCM paper.
 
     # predicted cross-spectral density
     G = zeros(eltype(S), nω, nd, nd);
@@ -91,11 +92,11 @@ function csd_approx(ω, derivatives, params, params_idx)
     return G + Gn
 end
 
-function csd_approx_lfp(ω, derivatives, params, params_idx)
+function csd_approx_lfp(ω, derivatives, params, params_idx, model_idx)
     # priors of spectral parameters
     # ln(α) and ln(β), region specific fluctuations: ln(γ)
     nω = length(ω)
-    nd = length(params_idx[:u])
+    nd = length(model_idx[:u])
     α = reshape(params[params_idx[:lnα]], 2, nd)
     β = params[params_idx[:lnβ]]
     γ = reshape(params[params_idx[:lnγ]], 2, nd)
@@ -113,10 +114,7 @@ function csd_approx_lfp(ω, derivatives, params, params_idx)
         Gs[:, i] .+= exp(γ[1, i] - 2) .* ω.^(-exp(γ[2, 1]))  # this is really oddly implemented in SPM, the exponent parameter is kept fixed, leaving parameters that essentially don't matter
     end
 
-#     Main.foo[] = ω, derivatives, params, params_idx
-# error()
-
-    S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
+    S = transferfunction(ω, derivatives, params, model_idx)   # This is K(ω) in the equations of the spectral DCM paper.
 
     # predicted cross-spectral density
     G = zeros(eltype(S), nω, nd, nd);
@@ -134,9 +132,9 @@ function csd_approx_lfp(ω, derivatives, params, params_idx)
     return G
 end
 
-function csd_mtf!(y, freqs, p, derivatives, params, params_idx, modality)   # alongside the above realtes to spm_csd_fmri_mtf.m
+function csd_mtf!(y, freqs, p, derivatives, params, params_idx, model_idx, modality)   # alongside the above realtes to spm_csd_fmri_mtf.m
     if modality == "fMRI"
-        G = csd_approx(freqs, derivatives, params, params_idx)
+        G = csd_approx(freqs, derivatives, params, params_idx, model_idx)
 
         dt = 1/(2*freqs[end])
         # the following two steps are very opaque. They are taken from the SPM code but it is unclear what the purpose of this transformation and back-transformation is
@@ -146,7 +144,7 @@ function csd_mtf!(y, freqs, p, derivatives, params, params_idx, modality)   # al
         mar = csd2mar(G, freqs, dt, p-1)
         csd = mar2csd(mar, freqs)
     elseif modality == "LFP"
-        csd = csd_approx_lfp(freqs, derivatives, params, params_idx)
+        csd = csd_approx_lfp(freqs, derivatives, params, params_idx, model_idx)
     end
     # convert complex of duals to dual of complex:
     if real(eltype(csd)) <: Dual

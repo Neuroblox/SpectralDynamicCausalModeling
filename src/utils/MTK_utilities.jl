@@ -1,17 +1,22 @@
 
-function defaultprior(model, nrr)
+function defaultprior(model, nr)
     _, idx_sts = get_dynamic_states(model)
     idx_u = get_idx_tagged_vars(model, "ext_input")                  # get index of external input state
     idx_bold, _ = get_eqidx_tagged_vars(model, "measurement")        # get index of equation of bold state
 
     # collect parameter default values, these constitute the prior mean.
+    # parcomp = "ComponentArray("
+    # parcomp *= string((par -> String(par) * " = " * string(Symbolics.getdefaultval(par)) * ",").(Symbol.(tunable_parameters(model)))...)
+    # parcomp *= ")"
+
     parammean = OrderedDict()
     np = sum(tunable_parameters(model); init=0) do par
         val = Symbolics.getdefaultval(par)
         parammean[par] = val
         length(val)
     end
-    indices = Dict(:dspars => collect(1:np))
+    indices2 = (dspars = collect(1:np), u = idx_u, m = idx_bold, sts = idx_sts)
+
     # Noise parameters
     parammean[:lnα] = [0.0, 0.0];            # intrinsic fluctuations, ln(α) as in equation 2 of Friston et al. 2014 
     n = length(parammean[:lnα]);
@@ -21,12 +26,9 @@ function defaultprior(model, nrr)
     n = length(parammean[:lnβ]);
     indices[:lnβ] = collect(np+1:np+n);
     np += n;
-    parammean[:lnγ] = zeros(Float64, nrr);   # region specific observation noise
-    indices[:lnγ] = collect(np+1:np+nrr);
-    np += nrr
-    indices[:u] = idx_u
-    indices[:m] = idx_bold
-    indices[:sts] = idx_sts
+    parammean[:lnγ] = zeros(Float64, nr);    # region specific observation noise
+    indices[:lnγ] = collect(np+1:np+nr);
+    np += nr
 
     # continue with prior variances
     paramvariance = copy(parammean)
@@ -44,7 +46,7 @@ function defaultprior(model, nrr)
             paramvariance[k] = 1/256.0;
         end
     end
-    return parammean, diagm(vecparam(paramvariance)), indices
+    return parammean, diagm(vecparam(paramvariance)), indices, indices2
 end
 
 ### Blox Connector and Utilities ###
@@ -454,8 +456,8 @@ end
     Returns:
     - `completeparamlist`: complete parameter list of a system, including those that were not tagged as tunable
 """
-function addnontunableparams(paramlist, sys)
-    completeparamlist = []
+function addnontunableparams(paramlist::Vector{T}, sys) where T
+    completeparamlist = Vector{T}()
     k = 0
     for p in parameters(sys)
         if istunable(p)

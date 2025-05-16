@@ -21,7 +21,7 @@
     -- `μλ_pr`      : prior mean(s) for λ hyperparameter(s)
     - `indices`  : indices to separate model parameters from other parameters. Needed for the computation of AD gradient.
 """
-function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indices, modelparam, modality)
+function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indices, indices2, modelparam, modality)
     # compute cross-spectral density
     dt = csdsetup.dt;                      # order of MAR. Hard-coded in SPM12 with this value. We will use the same for now.
     freq = csdsetup.freq;                  # frequencies at which the CSD is evaluated
@@ -63,7 +63,7 @@ function setup_spDCM(data, model, initcond, csdsetup, priors, hyperpriors, indic
         Πλ_pr = Matrix(exp(4)*I, nh, nh)             # compute prior covariance of λ
     end
 
-    f! = (y, params) -> csd_mtf!(y, freq, mar_order, derivatives, params, indices, modality)
+    f! = (y, params) -> csd_mtf!(y, freq, mar_order, derivatives, params, indices, indices2, modality)
 
     # variational laplace state variables
     vlstate = VLMTKState(

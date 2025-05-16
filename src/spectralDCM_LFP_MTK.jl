@@ -64,7 +64,7 @@ end
 nl = Int((nr^2-nr)/2)   # number of links unidirectional
 @parameters a_sp_ss[1:nl] = repeat([0.0], nl) # forward connection parameter sp -> ss: sim value 1/2
 @parameters a_sp_dp[1:nl] = repeat([0.0], nl) # forward connection parameter sp -> dp: sim value 3/2
-@parameters a_dp_sp[1:nl] = repeat([0.0], nl)  # backward connection parameter dp -> sp: sim value 1/16
+@parameters a_dp_sp[1:nl] = repeat([0.0], nl) # backward connection parameter dp -> sp: sim value 1/16
 @parameters a_dp_ii[1:nl] = repeat([0.0], nl) # backward connection parameters dp -> ii: sim value 3
 
 k = 0
@@ -108,7 +108,9 @@ np = sum(tunable_parameters(fullmodel); init=0) do par
     modelparam[par] = val
     length(val)
 end
-indices = Dict(:dspars => collect(1:np))
+# indices2 = Dict(:dspars => collect(1:np))
+indices2 = (dspars = collect(1:np), u = idx_u, m = idx_measurement, sts = idx_sts)
+indices = Dict()
 # Noise parameter mean
 modelparam[:lnα] = zeros(Float64, 2, nr);         # intrinsic fluctuations, ln(α) as in equation 2 of Friston et al. 2014 
 n = length(modelparam[:lnα]);
@@ -122,9 +124,10 @@ modelparam[:lnγ] = (-16.0)*ones(Float64, 2, nr);  # region specific observation
 n = length(modelparam[:lnγ]);
 indices[:lnγ] = collect(np+1:np+n);
 np += n
-indices[:u] = idx_u
-indices[:m] = idx_measurement
-indices[:sts] = idx_sts
+
+# indices2[:u] = idx_u
+# indices2[:m] = idx_measurement
+# indices2[:sts] = idx_sts
 
 # define prior variances
 paramvariance = copy(modelparam)
@@ -158,10 +161,10 @@ hyperpriors = (  # prior metaparameter precision, needs to be a matrix
                Q = Q,
               );
 
-(state, setup) = setup_spDCM(data, fullmodel, initcond, csdsetup, priors, hyperpriors, indices, modelparam, "LFP");
-using StatProfilerHTML
+(state, setup) = setup_spDCM(data, fullmodel, initcond, csdsetup, priors, hyperpriors, indices, indices2, modelparam, "LFP");
+# @benchmark let state = copy($state)
 
-@profilehtml for iter in 1:128
+for iter in 1:128
     state.iter = iter
     run_spDCM_iteration!(state, setup)
     print("iteration: ", iter, " - F:", state.F[end] - state.F[2], " - dF predicted:", state.dF[end], "\n")
