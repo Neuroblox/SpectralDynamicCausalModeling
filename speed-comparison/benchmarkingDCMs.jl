@@ -315,37 +315,37 @@ BLAS.set_num_threads(1)
 BLAS.get_num_threads()
 
 # speed comparison between different DCM implementations
-for n in 2:6
-    vals = matread("speed-comparison/fastspeed/matlab_" * string(n) * "regions.mat");
+# for n in 2:10
+#     vals = matread("speed-comparison/fastspeed/matlab_" * string(n) * "regions.mat");
 
-    wrapperfunction(vals, max_iter=1, dx=exp(-8))
-    t_juliaSPM = @elapsed spm_state = wrapperfunction(vals, dx=exp(-8))
+#     wrapperfunction(vals, max_iter=1, dx=exp(-8))
+#     t_juliaSPM = @elapsed spm_state = wrapperfunction(vals, dx=exp(-8))
 
-    wrapperfunction(vals, max_iter=1)
-    t_juliaAD = @elapsed ad_state = wrapperfunction(vals)
+#     wrapperfunction(vals, max_iter=1)
+#     t_juliaAD = @elapsed ad_state = wrapperfunction(vals)
 
-    wrapperfunction_MTK(vals, max_iter=1)
-    t_juliaMTK = @elapsed mtk_state = wrapperfunction_MTK(vals)
-    @show "Iteration:", n, t_juliaAD, t_juliaSPM, t_juliaMTK
+#     wrapperfunction_MTK(vals, max_iter=1)
+#     t_juliaMTK = @elapsed mtk_state = wrapperfunction_MTK(vals)
+#     @show "Iteration:", n, t_juliaAD, t_juliaSPM, t_juliaMTK
 
-    matwrite("speedcomp" * string(n) * "regions.mat", Dict(
-        "t_mat" => vals["matcomptime"],
-        "F_mat" => vals["F"],
-        "t_jad" => t_juliaAD,
-        "F_jad" => ad_state.F[end],
-        "t_jspm" => t_juliaSPM,
-        "F_jspm" => spm_state.F[end],
-        "t_mtk" => t_juliaMTK,
-        "F_mtk" => mtk_state.F[end],
-        "iter_spm" => spm_state.iter,
-        "iter_ad" => ad_state.iter,
-        "iter_mtk" => mtk_state.iter
-    ); compress = true)    
-end
+#     matwrite("speedcomp" * string(n) * "regions.mat", Dict(
+#         "t_mat" => vals["matcomptime"],
+#         "F_mat" => vals["F"],
+#         "t_jad" => t_juliaAD,
+#         "F_jad" => ad_state.F[end],
+#         "t_jspm" => t_juliaSPM,
+#         "F_jspm" => spm_state.F[end],
+#         "t_mtk" => t_juliaMTK,
+#         "F_mtk" => mtk_state.F[end],
+#         "iter_spm" => spm_state.iter,
+#         "iter_ad" => ad_state.iter,
+#         "iter_mtk" => mtk_state.iter
+#     ); compress = true)    
+# end
 
 
 
-for n in 2:5
+for n in 2:10
     vals = matread("speed-comparison/cmc_" * string(n) * "regions.mat");
 
     wrapperfunction_MTK_lfp(vals, max_iter=1)
