@@ -8,12 +8,13 @@ using ComponentArrays
 # both of the following are needed for typedefinitions even if no symbolic procedure is used
 using ModelingToolkit
 using OrderedCollections
+using SparseArrays
 
 include("utils/typedefinitions.jl")
 include("models/hemodynamic_response.jl")     # hemodynamic and BOLD signal model
-include("variationallaplace/transferfunction.jl")
 include("utils/helperfunctions.jl")
 include("utils/helperfunctions_AD.jl")
+include("variationallaplace/transferfunction.jl")
 include("variationallaplace/optimization.jl")             # switch between _spm and _AD version.
 include("utils/mar.jl")                       # multivariate auto-regressive model functions
 include("utils/spDCMsetup.jl")

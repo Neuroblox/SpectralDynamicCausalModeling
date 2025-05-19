@@ -15,7 +15,7 @@ function defaultprior(model, nr)
         parammean[par] = val
         length(val)
     end
-    indices2 = (dspars = collect(1:np), u = idx_u, m = idx_bold, sts = idx_sts)
+    indices = Dict(:dspars => collect(1:np))
 
     # Noise parameters
     parammean[:lnα] = [0.0, 0.0];            # intrinsic fluctuations, ln(α) as in equation 2 of Friston et al. 2014 
@@ -29,10 +29,13 @@ function defaultprior(model, nr)
     parammean[:lnγ] = zeros(Float64, nr);    # region specific observation noise
     indices[:lnγ] = collect(np+1:np+nr);
     np += nr
+    indices[:u] = idx_u
+    indices[:m] = idx_bold
+    indices[:sts] = idx_sts
 
     # continue with prior variances
     paramvariance = copy(parammean)
-    paramvariance[:lnγ] = ones(Float64, nrr)./64.0;
+    paramvariance[:lnγ] = ones(Float64, nr)./64.0;
     paramvariance[:lnα] = ones(Float64, length(parammean[:lnα]))./64.0;
     paramvariance[:lnβ] = ones(Float64, length(parammean[:lnβ]))./64.0;
     for (k, v) in paramvariance
@@ -46,7 +49,7 @@ function defaultprior(model, nr)
             paramvariance[k] = 1/256.0;
         end
     end
-    return parammean, diagm(vecparam(paramvariance)), indices, indices2
+    return parammean, diagm(vecparam(paramvariance)), indices
 end
 
 ### Blox Connector and Utilities ###

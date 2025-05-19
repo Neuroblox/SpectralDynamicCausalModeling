@@ -1,3 +1,5 @@
+trmul(A, B) = sum(A' .* B)    # compute a more efficient trace of multiplication of two square matrices
+
 function diff!(U, dx, f!, y0, param)
     nJ = size(U, 2)
     f!(y0, param)
@@ -77,9 +79,9 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
                 JPJ[i] = real(J'*P[i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
+                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - trmul(Σθ_po, JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(sum(PΣ[i]' ⋅ PΣ[j]))*1/2
+                    dFdλλ[i, j] = -real(trmul(PΣ[i], PΣ[j]))*1/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
@@ -87,7 +89,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup, dx)
             # if nh == 1, do the followng simplifications to improve computational speed:          
             # 1. replace trace(PΣ[1]) by ny
             # 2. replace JPJ[1] by Pp
-            dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - tr(Σθ_po * Pp)/2;
+            dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - trmul(Σθ_po, Pp)/2;
 
             # 3. replace trace(PΣ[1],PΣ[1]) by ny
             dFdλλ[1, 1] = - ny/2;
@@ -213,7 +215,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
     end
 
     ϵ = reshape(y - f_μθ, ny)       # error
-    J = - dfdp                          # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
+    J = - dfdp                      # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
 
     ## M-step: Fisher scoring scheme to find h = max{F(p,h)} // comment from MATLAB code
     P = zeros(eltype(J), size(Q))
@@ -238,9 +240,9 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
                 JPJ[i] = real(J'*P[i]*J)      # in MATLAB code 'real()' is applied (see also some lines above)
             end
             for i = 1:nh
-                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - tr(Σθ_po * JPJ[i]))/2
+                dFdλ[i] = (tr(PΣ[i]) - real(dot(ϵ, P[i], ϵ)) - trmul(Σθ_po, JPJ[i]))/2
                 for j = i:nh
-                    dFdλλ[i, j] = -real(sum(PΣ[i]' ⋅ PΣ[j]))*1/2
+                    dFdλλ[i, j] = -real(trmul(PΣ[i], PΣ[j]))/2
                     dFdλλ[j, i] = dFdλλ[i, j]
                 end
             end
@@ -248,7 +250,7 @@ function run_spDCM_iteration!(state::VLState, setup::VLSetup)
             # if nh == 1, do the followng simplifications to improve computational speed:          
             # 1. replace trace(PΣ[1]) by ny
             # 2. replace JPJ[1] by Pp
-            dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - tr(Σθ_po * Pp)/2;
+            dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - trmul(Σθ_po, Pp)/2;
 
             # 3. replace trace(PΣ[1],PΣ[1]) by ny
             dFdλλ[1, 1] = - ny/2;
@@ -373,11 +375,10 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
         end
     end
 
-    trmul(A, B) = sum(A' .* B)
     ϵ = reshape(y - f_μθ, ny)                   # error
-    J = - dfdp   # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian. 
+    J = - dfdp   # Jacobian, unclear why we have a minus sign. Helmut: comes from deriving a Gaussian.
+ 
     ## M-step: Fisher scoring scheme to find h = max{F(p,h)} // comment from MATLAB code
-    szQs = [size(Q[i]) for i ∈ 1:nh]
     P = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
     PΣ = [spzeros(eltype(J), size(Q[i])) for i = 1:nh]
     JPJ = [spzeros(real(eltype(J)), size(J)) for i = 1:nh]
@@ -408,7 +409,7 @@ function run_spDCM_iteration!(state::VLMTKState, setup::VLMTKSetup)
             # if nh == 1, do the followng simplifications to improve computational speed:          
             # 1. replace trace(PΣ[1]) by ny
             # 2. replace JPJ[1] by Pp
-            dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - tr(Σθ_po * Pp)/2;
+            dFdλ[1, 1] = ny/2 - real(ϵ'*iΣ*ϵ)/2 - trmul(Σθ_po, Pp)/2;
 
             # 3. replace trace(PΣ[1],PΣ[1]) by ny
             dFdλλ[1, 1] = - ny/2;

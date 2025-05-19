@@ -45,7 +45,7 @@ end
     Gn in the code corresponds to Ge in the paper, i.e. the observation noise. In the code global and local components are defined, no such distinction
     is discussed in the paper. In fact the parameter γ, corresponding to local component is not present in the paper.
 """
-function csd_approx(ω, derivatives, params, params_idx, model_idx)
+function csd_approx(ω, derivatives, params, params_idx)
     # priors of spectral parameters
     # ln(α) and ln(β), region specific fluctuations: ln(γ)
     nω = length(ω)
@@ -79,7 +79,7 @@ function csd_approx(ω, derivatives, params, params_idx, model_idx)
         end
     end
 
-    S = transferfunction(ω, derivatives, params, model_idx)   # This is K(ω) in the equations of the spectral DCM paper.
+    S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
 
     # predicted cross-spectral density
     G = zeros(eltype(S), nω, nd, nd);
@@ -90,11 +90,11 @@ function csd_approx(ω, derivatives, params, params_idx, model_idx)
     return G + Gn
 end
 
-function csd_approx_lfp(ω, derivatives, params, params_idx, model_idx)
+function csd_approx_lfp(ω, derivatives, params, params_idx)
     # priors of spectral parameters
     # ln(α) and ln(β), region specific fluctuations: ln(γ)
     nω = length(ω)
-    nd = length(model_idx[:u])
+    nd = length(params_idx[:u])
     α = reshape(params[params_idx[:lnα]], 2, nd)
     β = params[params_idx[:lnβ]]
     γ = reshape(params[params_idx[:lnγ]], 2, nd)
@@ -112,7 +112,7 @@ function csd_approx_lfp(ω, derivatives, params, params_idx, model_idx)
         Gs[:, i] .+= exp(γ[1, i] - 2) .* ω.^(-exp(γ[2, 1]))  # this is really oddly implemented in SPM, the exponent parameter is kept fixed, leaving parameters that essentially don't matter
     end
 
-    S = transferfunction(ω, derivatives, params, model_idx)   # This is K(ω) in the equations of the spectral DCM paper.
+    S = transferfunction(ω, derivatives, params, params_idx)   # This is K(ω) in the equations of the spectral DCM paper.
 
     # predicted cross-spectral density
     G = zeros(eltype(S), nω, nd, nd);
@@ -130,9 +130,9 @@ function csd_approx_lfp(ω, derivatives, params, params_idx, model_idx)
     return G
 end
 
-function csd_mtf!(y, freqs, p, derivatives, params, params_idx, model_idx, modality)   # alongside the above realtes to spm_csd_fmri_mtf.m
+function csd_mtf!(y, freqs, p, derivatives, params, params_idx, modality)   # alongside the above realtes to spm_csd_fmri_mtf.m
     if modality == "fMRI"
-        G = csd_approx(freqs, derivatives, params, params_idx, model_idx)
+        G = csd_approx(freqs, derivatives, params, params_idx)
 
         dt = 1/(2*freqs[end])
         # the following two steps are very opaque. They are taken from the SPM code but it is unclear what the purpose of this transformation and back-transformation is
@@ -142,12 +142,12 @@ function csd_mtf!(y, freqs, p, derivatives, params, params_idx, model_idx, modal
         mar = csd2mar(G, freqs, dt, p-1)
         csd = mar2csd(mar, freqs)
     elseif modality == "LFP"
-        csd = csd_approx_lfp(freqs, derivatives, params, params_idx, model_idx)
+        csd = csd_approx_lfp(freqs, derivatives, params, params_idx)
     end
     # convert complex of duals to dual of complex:
     if real(eltype(csd)) <: Dual
         y[:,:,:] = map(csd) do csdi
-            csdi_val  = Complex(real(csdi).value + imag(csdi).value)
+            csdi_val  = Complex(real(csdi).value, imag(csdi).value)
             csdi_part = Partials(Complex.(real(csdi).partials.values, imag(csdi).partials.values))
             Dual{tagtype(real(csdi))}(csdi_val, csdi_part)
         end
@@ -188,7 +188,7 @@ function transferfunction(x, ω, params)
         for i = 1:ng
             for k = 1:nk
                 # transfer functions (FFT of kernel)
-                Sk = (1im*2*pi*ω .- Λ[k]).^-1
+                Sk = ((2im*pi) .*ω .- Λ[k]).^-1
                 S[:, i, j] .+= dgdv[i, k]*dvdu[k, j]*Sk
             end
         end
@@ -239,9 +239,11 @@ function csd_fmri_mtf!(y, x, ω, p, params)
     csd = mar2csd(mar, ω)
     # convert complex of duals to dual of complex:
     if real(eltype(csd)) <: Dual
-        csd_vals = Complex.((p->p.value).(real(csd)), (p->p.value).(imag(csd)))
-        csd_part = (p->p.partials).(real(csd)) + (p->p.partials).(imag(csd))*im
-        y[:,:,:] = map((x1, x2) -> Dual{tagtype(real(csd)[1]), ComplexF64, length(x2)}(x1, Partials(Tuple(x2))), csd_vals, csd_part)
+        y[:,:,:] = map(csd) do csdi
+            csdi_val  = Complex(real(csdi).value, imag(csdi).value)
+            csdi_part = Partials(Complex.(real(csdi).partials.values, imag(csdi).partials.values))
+            Dual{tagtype(real(csdi))}(csdi_val, csdi_part)
+        end
     else
         y[:,:,:] = csd
     end
