@@ -108,9 +108,9 @@ np = sum(tunable_parameters(fullmodel); init=0) do par
     modelparam[par] = val
     length(val)
 end
-# indices2 = Dict(:dspars => collect(1:np))
-indices2 = (dspars = collect(1:np), u = idx_u, m = idx_measurement, sts = idx_sts)
-indices = Dict{Symbol, Vector{Int}}()
+indices = Dict(:dspars => collect(1:np))
+# indices2 = (dspars = collect(1:np), u = idx_u, m = idx_measurement, sts = idx_sts)
+# indices = Dict{Symbol, Vector{Int}}()
 # Noise parameter mean
 modelparam[:lnα] = zeros(Float64, 2, nr);         # intrinsic fluctuations, ln(α) as in equation 2 of Friston et al. 2014 
 n = length(modelparam[:lnα]);
@@ -125,9 +125,9 @@ n = length(modelparam[:lnγ]);
 indices[:lnγ] = collect(np+1:np+n);
 np += n
 
-# indices2[:u] = idx_u
-# indices2[:m] = idx_measurement
-# indices2[:sts] = idx_sts
+indices[:u] = idx_u
+indices[:m] = idx_measurement
+indices[:sts] = idx_sts
 
 # define prior variances
 paramvariance = copy(modelparam)
@@ -161,8 +161,8 @@ hyperpriors = (  # prior metaparameter precision, needs to be a matrix
                Q = Q,
               );
 
-(state, setup) = setup_spDCM(data, fullmodel, initcond, csdsetup, priors, hyperpriors, indices, indices2, modelparam, "LFP");
-# @benchmark let state = copy($state)
+(state, setup) = setup_spDCM(data, fullmodel, initcond, csdsetup, priors, hyperpriors, indices, modelparam, "LFP");
+@benchmark let state = copy($state)
 
 for iter in 1:128
     state.iter = iter
@@ -175,4 +175,5 @@ for iter in 1:128
             break
         end
     end
+end
 end
