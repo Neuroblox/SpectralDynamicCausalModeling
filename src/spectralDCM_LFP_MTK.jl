@@ -28,7 +28,7 @@ const D = ModelingToolkit.D_nounits
 
 
 ### get data and compute cross spectral density which is the actual input to the spectral DCM ###
-vars = matread("speed-comparison/cmc_3regions.mat");
+vars = matread("speed-comparison/cmc_2regions.mat");
 data = vars["csd"];
 nr = size(data, 2);
 dt = vars["dt"];
@@ -162,7 +162,6 @@ hyperpriors = (  # prior metaparameter precision, needs to be a matrix
               );
 
 (state, setup) = setup_spDCM(data, fullmodel, initcond, csdsetup, priors, hyperpriors, indices, modelparam, "LFP");
-@benchmark let state = copy($state)
 
 for iter in 1:128
     state.iter = iter
@@ -175,5 +174,4 @@ for iter in 1:128
             break
         end
     end
-end
 end
