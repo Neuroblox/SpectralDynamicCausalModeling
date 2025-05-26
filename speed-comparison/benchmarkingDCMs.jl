@@ -14,10 +14,6 @@ using SparseArrays
 using ModelingToolkit
 using OrderedCollections
 
-### a few packages relevant for speed tests and profiling ###
-using Serialization
-using StatProfilerHTML
-
 include("../src/utils/typedefinitions.jl")
 include("../src/models/hemodynamic_response.jl")     # hemodynamic and BOLD signal model
 include("../src/utils/helperfunctions.jl")
@@ -315,51 +311,51 @@ BLAS.set_num_threads(1)
 BLAS.get_num_threads()
 
 # speed comparison between different DCM implementations
+ for n in 2:15
+     vals = matread("speed-comparison/fmri_" * string(n) * "regions.mat");
+
+     wrapperfunction(vals, max_iter=1, dx=exp(-8))
+     t_juliaSPM = @elapsed spm_state = wrapperfunction(vals, dx=exp(-8))
+
+     wrapperfunction(vals, max_iter=1)
+     t_juliaAD = @elapsed ad_state = wrapperfunction(vals)
+
+     wrapperfunction_MTK(vals, max_iter=1)
+     t_juliaMTK = @elapsed mtk_state = wrapperfunction_MTK(vals)
+     @show "Iteration:", n, t_juliaAD, t_juliaSPM, t_juliaMTK
+
+     matwrite("speedcomp_fmri_" * string(n) * "regions.mat", Dict(
+         "t_mat" => vals["matcomptime"],
+         "F_mat" => vals["F"],
+         "t_jad" => t_juliaAD,
+         "F_jad" => ad_state.F[end],
+         "t_jspm" => t_juliaSPM,
+         "F_jspm" => spm_state.F[end],
+         "t_mtk" => t_juliaMTK,
+         "F_mtk" => mtk_state.F[end],
+         "iter_spm" => spm_state.iter,
+         "iter_ad" => ad_state.iter,
+         "iter_mtk" => mtk_state.iter
+     ); compress = true)    
+ end
+
+
+
 # for n in 2:10
-#     vals = matread("speed-comparison/fastspeed/matlab_" * string(n) * "regions.mat");
-
-#     wrapperfunction(vals, max_iter=1, dx=exp(-8))
-#     t_juliaSPM = @elapsed spm_state = wrapperfunction(vals, dx=exp(-8))
-
-#     wrapperfunction(vals, max_iter=1)
-#     t_juliaAD = @elapsed ad_state = wrapperfunction(vals)
-
-#     wrapperfunction_MTK(vals, max_iter=1)
-#     t_juliaMTK = @elapsed mtk_state = wrapperfunction_MTK(vals)
-#     @show "Iteration:", n, t_juliaAD, t_juliaSPM, t_juliaMTK
-
-#     matwrite("speedcomp" * string(n) * "regions.mat", Dict(
+#     vals = matread("speed-comparison/cmc_" * string(n) * "regions.mat");
+# 
+#     wrapperfunction_MTK_lfp(vals, max_iter=1)
+#     t_julialfp = @elapsed mtk_state = wrapperfunction_MTK_lfp(vals)
+#     @show "Iteration:", n, t_julialfp
+# 
+#     matwrite("speed-comparison/speedcomp_lfp_" * string(n) * "regions.mat", Dict(
 #         "t_mat" => vals["matcomptime"],
 #         "F_mat" => vals["F"],
-#         "t_jad" => t_juliaAD,
-#         "F_jad" => ad_state.F[end],
-#         "t_jspm" => t_juliaSPM,
-#         "F_jspm" => spm_state.F[end],
-#         "t_mtk" => t_juliaMTK,
+#         "t_mtk" => t_julialfp,
 #         "F_mtk" => mtk_state.F[end],
-#         "iter_spm" => spm_state.iter,
-#         "iter_ad" => ad_state.iter,
 #         "iter_mtk" => mtk_state.iter
 #     ); compress = true)    
 # end
-
-
-
-for n in 2:10
-    vals = matread("speed-comparison/cmc_" * string(n) * "regions.mat");
-
-    wrapperfunction_MTK_lfp(vals, max_iter=1)
-    t_julialfp = @elapsed mtk_state = wrapperfunction_MTK_lfp(vals)
-    @show "Iteration:", n, t_julialfp
-
-    matwrite("speed-comparison/speedcomp_lfp_improved_sparse_" * string(n) * "regions.mat", Dict(
-        "t_mat" => vals["matcomptime"],
-        "F_mat" => vals["F"],
-        "t_mtk" => t_julialfp,
-        "F_mtk" => mtk_state.F[end],
-        "iter_mtk" => mtk_state.iter
-    ); compress = true)    
-end
 
 
 ### Profiling ###
