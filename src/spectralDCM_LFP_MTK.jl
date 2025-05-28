@@ -11,6 +11,7 @@ using ModelingToolkit
 using Statistics
 using MAT
 using SparseArrays
+using Neuroblox
 
 include("utils/typedefinitions.jl")
 include("utils/helperfunctions.jl")
@@ -20,12 +21,7 @@ include("variationallaplace/transferfunction.jl")
 include("variationallaplace/optimization.jl")
 include("utils/mar.jl")
 include("models/neuraldynamics_MTK.jl")
-include("models/measurement_MTK.jl")
 include("utils/MTK_utilities.jl")
-
-const t = ModelingToolkit.t_nounits
-const D = ModelingToolkit.D_nounits
-
 
 ### get data and compute cross spectral density which is the actual input to the spectral DCM ###
 vars = matread("speed-comparison/cmc_2regions.mat");
