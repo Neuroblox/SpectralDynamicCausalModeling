@@ -1,30 +1,11 @@
-using LinearAlgebra
-using MKL
-using FFTW
-using ToeplitzMatrices
-using ForwardDiff
-using OrderedCollections
-using ComponentArrays
-using MetaGraphs
-using Graphs
-using SparseArrays
-using MAT
+using SpectralDynamicCausalModeling
 using Neuroblox
+using MAT
+using LinearAlgebra
+using Graphs
+using OrderedCollections
 
-
-include("utils/typedefinitions.jl")
-include("utils/helperfunctions.jl")
-include("utils/helperfunctions_AD.jl")
-include("utils/spDCMsetup.jl")
-include("variationallaplace/transferfunction.jl")
-include("variationallaplace/optimization.jl")
-include("utils/mar.jl")
 include("models/neuraldynamics_MTK.jl")
-# include("models/measurement_MTK.jl")
-include("utils/MTK_utilities.jl")
-
-const t = ModelingToolkit.t_nounits
-const D = ModelingToolkit.D_nounits
 
 ### Load data ###
 vars = matread("demodata/spm25_demo.mat");
@@ -98,6 +79,7 @@ hyperpriors = (Πλ_pr = 128.0*ones(1, 1),   # prior metaparameter precision, ne
 csdsetup = (mar_order = 8, freq = vec(vars["Hz"]), dt = vars["dt"]);
 
 (state, setup) = setup_spDCM(data, fullmodel, initcond, csdsetup, priors, hyperpriors, indices, pmean, "fMRI");
+
 for iter in 1:max_iter
     state.iter = iter
     run_spDCM_iteration!(state, setup)
