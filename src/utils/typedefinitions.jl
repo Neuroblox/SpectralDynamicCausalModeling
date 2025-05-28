@@ -1,23 +1,3 @@
-### type definitions ###
-abstract type AbstractBlox end # Blox is the abstract type for Blox that are displayed in the GUI
-abstract type AbstractComponent end
-abstract type BloxConnection end
-
-# subtypes of Blox define categories of Blox that are displayed in separate sections of the GUI
-abstract type AbstractNeuronBlox <: AbstractBlox end
-abstract type NeuralMassBlox <: AbstractBlox end
-abstract type CompositeBlox <: AbstractBlox end
-abstract type StimulusBlox <: AbstractBlox end
-abstract type ObserverBlox end   # not AbstractBlox since it should not show up in the GUI
-
-struct Connector
-    source::Vector{Symbol}
-    destination::Vector{Symbol}
-    equation::Vector{Equation}
-    weight::Vector{Num}
-    discrete_callbacks
-end
-
 # struct types for Variational Laplace
 mutable struct VLState
     iter::Int                    # number of iteration
@@ -58,19 +38,6 @@ mutable struct VLMTKState
     dFdθθ::Matrix{Float64}       # free energy Hessian w.r.t. parameters
 end
 
-Base.copy(S::VLMTKState) = VLMTKState(
-    copy(S.iter),
-    copy(S.v),
-    copy(S.F),
-    copy(S.dF),
-    copy(S.λ),
-    copy(S.ϵ_θ),
-    copy(S.reset_state),
-    copy(S.μθ_po),
-    copy(S.Σθ_po),
-    copy(S.dFdθ),
-    copy(S.dFdθθ)
-)
 
 struct VLMTKSetup{Model, T1 <: Array{ComplexF64}, T2 <: AbstractArray}
     model_at_x0::Model                        # model evaluated at initial conditions

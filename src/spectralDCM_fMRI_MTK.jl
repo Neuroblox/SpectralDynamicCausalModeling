@@ -7,9 +7,10 @@ using OrderedCollections
 using ComponentArrays
 using MetaGraphs
 using Graphs
-using ModelingToolkit
 using SparseArrays
 using MAT
+using Neuroblox
+
 
 include("utils/typedefinitions.jl")
 include("utils/helperfunctions.jl")
@@ -19,7 +20,7 @@ include("variationallaplace/transferfunction.jl")
 include("variationallaplace/optimization.jl")
 include("utils/mar.jl")
 include("models/neuraldynamics_MTK.jl")
-include("models/measurement_MTK.jl")
+# include("models/measurement_MTK.jl")
 include("utils/MTK_utilities.jl")
 
 const t = ModelingToolkit.t_nounits
